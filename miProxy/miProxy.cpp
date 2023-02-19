@@ -1,3 +1,6 @@
+#include "miProxy.h"
+#include "helpers.h"
+
 #include <iostream>
 #include <stdlib.h>
 #include <string>
@@ -15,21 +18,32 @@
 #include <errno.h>
 #include <cstdio>
 #include <vector>
+#include <getopt.h>
 
-int main(int argc, char*argv[])
-{
-    int listen_port;
-    bool www_ip=0;
-    int alpha;
+void MiProxy::get_options(int argc, char *argv[]) {
+    if (argc == 6 && argv[1] == "--nodns") {
+        dnsMode = false;
+        listenPort = atoi(argv[2]);
+        wwwIp = atoi(argv[3]);
+        alpha = atof(argv[4]);
+        logPath = argv[5];
+    } else if (argc == 7 && argv[1] == "--dns") {
+        dnsMode = true;
+        listenPort = atoi(argv[2]);
+        dnsIp = atoi(argv[3]);
+        dnsPort = atoi(argv[4]);
+        alpha = atof(argv[5]);
+        logPath = argv[6];
+    } else {
+        throw runtime_error("Error: missing or extra arguments");
+    }
+    return;
+}
+
+void MiProxy::init() {
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     char buffer[1025];
-    if (argc ==6)
-    {
-        listen_port = atoi(argv[2]);
-        www_ip = atoi(argv[3]);
-        alpha = atoi(argv[4]);
-    }
 
     struct sockaddr_in client_addr, server_addr;
     int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -43,7 +57,7 @@ int main(int argc, char*argv[])
 		return -1;
 	}
     struct sockaddr_in addr;
-	if (make_server_sockaddr(&addr, listen_port) == -1) {
+	if (make_server_sockaddr(&addr, listenPort) == -1) {
 		return -1;
 	}
     if (bind(sockfd, (sockaddr *) &addr, sizeof(addr)) == -1) {
@@ -54,9 +68,9 @@ int main(int argc, char*argv[])
     
     memset(&client_addr, 0, sizeof (client_addr));		
 	socklen_t client_addr_len = sizeof(client_addr);
+}
 
-    fd_set readfds;
-    std::vector<int> client_socket;
+void MiProxy::run() {
     while(true)
     {
         int maxfd = 0;
@@ -95,44 +109,4 @@ int main(int argc, char*argv[])
         }
     }
     
-}
-
-int make_client_sockaddr(struct sockaddr_in *addr, const char *hostname, int port) {
-	// Step (1): specify socket family.
-	// This is an internet socket.
-	addr->sin_family = AF_INET;
-
-	// Step (2): specify socket address (hostname).
-	// The socket will be a client, so call this unix helper function
-	// to convert a hostname string to a useable `hostent` struct.
-	struct hostent *host = gethostbyname(hostname);
-	if (host == nullptr) {
-		fprintf(stderr, "%s: unknown host\n", hostname);
-		return -1;
-	}
-	memcpy(&(addr->sin_addr), host->h_addr, host->h_length);
-
-	// Step (3): Set the port value.
-	// Use htons to convert from local byte order to network byte order.
-	addr->sin_port = htons(port);
-
-	return 0;
-}
-
-int make_server_sockaddr(struct sockaddr_in *addr, int port) {
-	// Step (1): specify socket family.
-	// This is an internet socket.
-	addr->sin_family = AF_INET;
-
-	// Step (2): specify socket address (hostname).
-	// The socket will be a server, so it will only be listening.
-	// Let the OS map it to the correct address.
-	addr->sin_addr.s_addr = INADDR_ANY;
-
-	// Step (3): Set the port value.
-	// If port is 0, the OS will choose the port for us.
-	// Use htons to convert from local byte order to network byte order.
-	addr->sin_port = htons(port);
-
-	return 0;
 }
