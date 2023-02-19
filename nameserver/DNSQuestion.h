@@ -50,7 +50,7 @@ struct DNSQuestion
 
         DNSQuestion question;
 
-        int index = msgBuf.find(':');
+        int index = static_cast<int>(msgBuf.find(':'));
         memcpy(question.QNAME, msgBuf.data() + index + 1, 100);
 
         std::istringstream iss(msgBuf);

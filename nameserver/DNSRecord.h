@@ -55,7 +55,7 @@ struct DNSRecord
 
         DNSRecord record;
 
-        int index = msgBuf.find(':');
+        int index = static_cast<int>(msgBuf.find(':'));
         memcpy(record.NAME, msgBuf.data() + index + 1, 100);
         memcpy(record.RDATA, msgBuf.data() + index + 101, 100);
 
