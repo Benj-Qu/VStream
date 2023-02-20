@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include <set>
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO, FD_SETSIZE macros
 #include <sys/types.h>
 #include <unistd.h> //close
@@ -29,7 +30,7 @@ class MiProxy {
     string log_path;
 
     fd_set readfds;
-    vector<int> client_sockets;
+    set<int> client_sockets;
     int master_socket, addrlen;
     struct sockaddr_in address;
 

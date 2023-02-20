@@ -100,19 +100,20 @@ void MiProxy::handle_master_connection() {
     // printf("Welcome message sent successfully\n");
 
     // add new socket to the array of sockets
-    client_sockets.push_back(new_socket);
-    printf("Adding to list of sockets as %d\n", client_sockets[0]);
+    if (!client_sockets.insert(new_socket).second){
+        cout << "Duplicate socket" << endl;
+    }
 }
 
 void MiProxy::handle_client_connection(int client_sock) {
-    cout << "Handling client connection at socket " << client_sock << endl;
+    cout << "\n---Handling client connection at socket " << client_sock << "---" << endl;
     char buffer[1025];  // data buffer of 1KiB + 1 bytes
     // Check if it was for closing , and also read the
     // incoming message
     getpeername(client_sock, (struct sockaddr *)&address, (socklen_t *)&addrlen);
     cout << "Starting to read from client socket " << client_sock << endl;
     ssize_t valread = read(client_sock, buffer, 1024);
-    cout << "Read " << valread << " from client socket " << client_sock << endl;
+    cout << "Read " << valread << " bytes from client socket " << client_sock << endl;
     if (valread == 0) {
         // Somebody disconnected, get their details and print
         printf("\n---Client disconnected---\n");
@@ -120,8 +121,7 @@ void MiProxy::handle_client_connection(int client_sock) {
                inet_ntoa(address.sin_addr), ntohs(address.sin_port));
         // Close the socket and mark as 0 in list for reuse
         close(client_sock);
-        client_sockets.erase(remove(client_sockets.begin(), client_sockets.end(), client_sock),
-                             client_sockets.end());
+        client_sockets.erase(client_sock);
     } else {
         // send the same message back to the client, hence why it's called
         // "echo_server"
