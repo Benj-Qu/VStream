@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <ctime>
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO, FD_SETSIZE macros
 #include <sys/types.h>
 #include <unistd.h> //close
@@ -19,6 +20,8 @@ struct Connection {
     string server_message;
     int client_socket;
     int server_socket;
+    size_t server_message_len;
+    time_t server_conn_start;
 };
 
 class MiProxy {
@@ -46,6 +49,7 @@ class MiProxy {
     void handle_request_message(Connection &conn);
     void handle_server_connection(Connection &conn);
     void handle_response_message(Connection &conn);
+    int parse_header(Connection &conn);
 };
 
 #endif

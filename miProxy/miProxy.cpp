@@ -100,7 +100,7 @@ void MiProxy::handle_master_connection() {
         cout << "client already exists" << endl;
         clients[ip].client_socket = new_socket;
     } else {
-        clients[ip] = {"", "", new_socket, -1};
+        clients[ip] = {"", "", new_socket, -1, 0, 0};
     }
 }
 
@@ -108,7 +108,7 @@ const static int BUFFER_SIZE = 1024;
 
 void MiProxy::handle_client_connection(Connection &conn) {
     cout << "\n---Handling client connection at socket " << conn.client_socket << "---" << endl;
-    char buffer[BUFFER_SIZE];  // data buffer of 1KiB + 1 bytes
+    char buffer[BUFFER_SIZE];  // data buffer of 1KB
     // Check if it was for closing , and also read the incoming message
     // Returns the address in address
     struct sockaddr_in address;
@@ -143,13 +143,14 @@ void MiProxy::handle_client_connection(Connection &conn) {
 void MiProxy::handle_request_message(Connection &conn) {
     // forward the message to the server
     if (conn.server_socket == -1) {
+        // create a new socket to connect to the server
         conn.server_socket = socket(AF_INET, SOCK_STREAM, 0);
         if (conn.server_socket < 0) {
             throw runtime_error("socket failed");
         }
 
         struct sockaddr_in address;
-        if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {
+        if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) { //TODO
             throw runtime_error("make_client_sockaddr failed");
         }
 
@@ -167,7 +168,7 @@ void MiProxy::handle_request_message(Connection &conn) {
 
 void MiProxy::handle_server_connection(Connection &conn) {
     cout << "\n---Handling server connection at socket " << conn.server_socket << "---" << endl;
-    char buffer[BUFFER_SIZE];  // data buffer of 1KiB + 1 bytes
+    char buffer[BUFFER_SIZE];  // data buffer of 1KB
     // Check if it was for closing , and also read the incoming message
     // Returns the address in address
     struct sockaddr_in address;
@@ -190,24 +191,13 @@ void MiProxy::handle_server_connection(Connection &conn) {
 
     conn.server_message.append(buffer, valread);
 
-    size_t end_pos = conn.server_message.find("\r\n\r\n");
-    if (end_pos == string::npos) {
-        cout << "header not complete" << endl;
-        return;
+    if (conn.server_message_len == 0 && parse_header(conn) == -1) {
+        return; // header not complete
     }
-    size_t cl_pos = conn.server_message.find("Content-Length: ");
-    size_t con_end_pos = conn.server_message.find("\r\n", cl_pos);
-    if (cl_pos == string::npos || con_end_pos == string::npos) {
-        cout << "---No Content-Length header---" << endl;
-        cout << conn.server_message << endl;
-        return;
-    }
-    string cl_str = conn.server_message.substr(cl_pos + 16, con_end_pos - cl_pos - 16);
-    int cl = stoi(cl_str);
-    cout << "Content-Length: " << cl << endl;
-    if (conn.server_message.size() < end_pos + 4 + cl) {
+
+    if (conn.server_message.size() < conn.server_message_len) {
         cout << "Received " << conn.server_message.size() << " bytes, waiting for "
-             << end_pos + 4 + cl - conn.server_message.size() << " more bytes..." << endl;
+             << conn.server_message_len - conn.server_message.size() << " more bytes..." << endl;
         return;
     }
 
@@ -225,6 +215,27 @@ void MiProxy::handle_response_message(Connection &conn) {
     cout << "Sending message to client..." << endl;
     send_all(conn.client_socket, conn.server_message.c_str(), conn.server_message.size());
     conn.server_message.clear();
+    conn.server_message_len = 0;
+}
+
+int MiProxy::parse_header(Connection &conn) {
+    size_t end_pos = conn.server_message.find("\r\n\r\n");
+    if (end_pos == string::npos) {
+        cout << "header not complete" << endl;
+        return -1;
+    }
+    size_t cl_pos = conn.server_message.find("Content-Length: ");
+    size_t con_end_pos = conn.server_message.find("\r\n", cl_pos);
+    if (cl_pos == string::npos || con_end_pos == string::npos) {
+        cout << "---No Content-Length header---" << endl;
+        cout << conn.server_message << endl;
+        return -1;
+    }
+    string cl_str = conn.server_message.substr(cl_pos + 16, con_end_pos - cl_pos - 16);
+    int content_length = stoi(cl_str);
+    cout << "Content-Length: " << content_length << endl;
+    conn.server_message_len = end_pos + 4 + (size_t)content_length;
+    return 0;
 }
 
 void MiProxy::run() {
