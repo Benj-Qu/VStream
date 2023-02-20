@@ -1,112 +1,171 @@
 #include "miProxy.h"
-#include "helpers.h"
 
-#include <iostream>
-#include <stdlib.h>
-#include <string>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
-#include <string.h>
-#include <sys/select.h>
-#include <vector>
+#include <stdlib.h>
+
 #include <algorithm>
 #include <cassert>
-#include <sys/time.h> 
-#include <errno.h>
 #include <cstdio>
-#include <vector>
-#include <getopt.h>
+#include <string>
 
 void MiProxy::get_options(int argc, char *argv[]) {
-    if (argc == 6 && argv[1] == "--nodns") {
-        dnsMode = false;
-        listenPort = atoi(argv[2]);
-        wwwIp = atoi(argv[3]);
-        alpha = atof(argv[4]);
-        logPath = argv[5];
-    } else if (argc == 7 && argv[1] == "--dns") {
-        dnsMode = true;
-        listenPort = atoi(argv[2]);
-        dnsIp = atoi(argv[3]);
-        dnsPort = atoi(argv[4]);
-        alpha = atof(argv[5]);
-        logPath = argv[6];
+    vector<string> args(argv, argv + argc);
+    if (argc == 6 && args[1] == "--nodns") {
+        dns_mode = false;
+        listen_port = stoi(args[2]);
+        www_ip = args[3];
+        alpha = stof(args[4]);
+        log_path = args[5];
+        cout << "dns_mode: " << dns_mode
+             << "\nlisten_port: " << listen_port
+             << "\nwww_ip: " << www_ip
+             << "\nalpha: " << alpha
+             << "\nlog_path: " << log_path << endl;
+    } else if (argc == 7 && args[1] == "--dns") {
+        dns_mode = true;
+        listen_port = stoi(args[2]);
+        dns_ip = args[3];
+        dns_port = stoi(args[4]);
+        alpha = stof(args[5]);
+        log_path = args[6];
+        cout << "dns_mode: " << dns_mode
+             << "\nlisten_port: " << listen_port
+             << "\ndns_ip: " << dns_ip
+             << "\ndns_port: " << dns_port
+             << "\nalpha: " << alpha
+             << "\nlog_path: " << log_path << endl;
     } else {
         throw runtime_error("Error: missing or extra arguments");
     }
     return;
 }
 
-void MiProxy::init() {
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    char buffer[1025];
+void MiProxy::init_master_socket() {
+    // create a master socket
+    master_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (master_socket <= 0) {
+        throw runtime_error("socket failed");
+    }
 
-    struct sockaddr_in client_addr, server_addr;
-    int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd == -1) {
-		perror("Error opening stream socket");
-		return -1;
-	}
-    int yesval = 1;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yesval, sizeof(yesval)) == -1) {
-		perror("Error setting socket options");
-		return -1;
-	}
-    struct sockaddr_in addr;
-	if (make_server_sockaddr(&addr, listenPort) == -1) {
-		return -1;
-	}
-    if (bind(sockfd, (sockaddr *) &addr, sizeof(addr)) == -1) {
-		perror("Error binding stream socket");
-		return -1;
-	}
-    listen(sockfd, 10);
-    
-    memset(&client_addr, 0, sizeof (client_addr));		
-	socklen_t client_addr_len = sizeof(client_addr);
+    // set master socket to allow multiple connections ,
+    // this is just a good habit, it will work without this
+    int yes = 1;
+    if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+        throw runtime_error("setsockopt failed");
+    }
+
+    // type of socket created
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(listen_port);
+
+    addrlen = sizeof(address);
+
+    // bind the socket to localhost listen_port
+    if (bind(master_socket, (sockaddr *)&address, addrlen) < 0) {
+        throw runtime_error("bind failed");
+    }
+    printf("---Listening on port %d---\n", listen_port);
+
+    // try to specify maximum of 10 pending connections for the master socket
+    if (listen(master_socket, 10) < 0) {
+        runtime_error("listen failed");
+    }
+}
+
+void MiProxy::init() {
+    client_sockets.clear();
+    init_master_socket();
+    puts("Waiting for connections ...");
+}
+
+void MiProxy::handle_master_connection() {
+    int new_socket = accept(master_socket, (sockaddr *)&address, (socklen_t *)&addrlen);
+    if (new_socket < 0) {
+        throw runtime_error("accept");
+    }
+
+    // inform user of socket number - used in send and receive commands
+    printf("\n---New host connection---\n");
+    printf("socket fd is %d , ip is : %s , port : %d \n", new_socket,
+           inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+
+    // send new connection greeting message
+    // TODO: REMOVE THIS CALL TO SEND WHEN DOING THE ASSIGNMENT 2.
+    // ssize_t send_rval = send(new_socket, message, strlen(message), 0);
+    // if (send_rval != strlen(message)) {
+    //     perror("send");
+    // }
+    // printf("Welcome message sent successfully\n");
+
+    // add new socket to the array of sockets
+    client_sockets.push_back(new_socket);
+}
+
+void MiProxy::handle_client_connection(int client_sock) {
+    char buffer[1025];  // data buffer of 1KiB + 1 bytes
+    // Check if it was for closing , and also read the
+    // incoming message
+    getpeername(client_sock, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+    ssize_t valread = read(client_sock, buffer, 1024);
+    if (valread == 0) {
+        // Somebody disconnected, get their details and print
+        printf("\n---Client disconnected---\n");
+        printf("Client disconnected , ip %s , port %d \n",
+               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        // Close the socket and mark as 0 in list for reuse
+        close(client_sock);
+        client_sockets.erase(remove(client_sockets.begin(), client_sockets.end(), client_sock),
+                             client_sockets.end());
+    } else {
+        // send the same message back to the client, hence why it's called
+        // "echo_server"
+        buffer[valread] = '\0';
+        printf("\n---New message---\n");
+        printf("Message %s\n", buffer);
+        printf("Received from: ip %s , port %d \n",
+               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        // TODO: WHEN DOING ASSIGNMENT 2 REMEMBER TO REMOVE THIS LINE!
+        // send(client_sock, buffer, strlen(buffer), 0);
+    }
 }
 
 void MiProxy::run() {
-    while(true)
-    {
-        int maxfd = 0;
+    while (true) {
+        // clear the socket set
         FD_ZERO(&readfds);
-        FD_SET(sockfd, &readfds);
 
-        int activity = select(FD_SETSIZE, &readfds, NULL, NULL, NULL);
-        if (activity <  0) {
-            perror("select error");
+        // add master socket to set
+        cout << "Adding master socket to set..." << endl;
+        FD_SET(master_socket, &readfds);
+        // add client sockets to set
+        cout << "Adding client sockets to set..." << endl;
+        cout << "Number of client sockets: " << client_sockets.size() << endl;
+        for (int client_sock : client_sockets) {
+            FD_SET(client_sock, &readfds);
+            cout << "Adding client socket " << client_sock << " to set..." << endl;
+        }
+        cout << "Waiting for activity on sockets..." << endl;
+        // wait for an activity on one of the sockets, timeout is NULL,
+        // so wait indefinitely
+        ssize_t activity = select(FD_SETSIZE, &readfds, NULL, NULL, NULL);
+        cout << "Activity detected on socket!" << endl;
+        if ((activity < 0) && (errno != EINTR)) {
+            throw runtime_error("select error");
         }
 
-        if (FD_ISSET(sockfd, &readfds)) {
-            int new_socket = accept(sockfd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-            if(new_socket < 0) {
-                perror("accept error");
-            }
-            client_socket.push_back(new_socket);
+        // If something happened on the master socket,
+        // then its an incoming connection, call accept()
+        if (FD_ISSET(master_socket, &readfds)) {
+            handle_master_connection();
         }
-        for(auto &client_sock: client_socket){
-            if (client_sock != 0 && FD_ISSET(client_sock, &readfds)){
-                getpeername(client_sock, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-                int val = recv(client_sock, buffer, 1025, 0);
-                if(val == 0) {
-                    close(client_sock);
-                    client_sock = 0;
-                }
-                else {
-                    int web_server_port = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-                    struct sockaddr_in addr;
-                    if (connect(sockfd, (sockaddr *) &addr, sizeof(addr)) == -1) {
-                        perror("Error connecting stream socket");
-                        return -1;
-                    }
-                }
+        // else it's some IO operation on a client socket
+        for (int client_sock : client_sockets) {
+            if (FD_ISSET(client_sock, &readfds)) {
+                handle_client_connection(client_sock);
             }
         }
     }
-    
 }
