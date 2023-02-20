@@ -87,9 +87,10 @@ void MiProxy::handle_master_connection() {
     }
 
     // inform user of socket number - used in send and receive commands
+    string ip = inet_ntoa(address.sin_addr);
     printf("\n---New host connection---\n");
     printf("socket fd is %d , ip is : %s , port : %d \n", new_socket,
-           inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+           ip.c_str(), ntohs(address.sin_port));
 
     // send new connection greeting message
     // TODO: REMOVE THIS CALL TO SEND WHEN DOING THE ASSIGNMENT 2.
@@ -100,9 +101,12 @@ void MiProxy::handle_master_connection() {
     // printf("Welcome message sent successfully\n");
 
     // add new socket to the array of sockets
-    if (!client_sockets.insert(new_socket).second){
-        cout << "Duplicate socket" << endl;
+    if (clients.find(ip) != clients.end()) {
+        cout << "Error: client already exists" << endl;
+    } else {
+        clients[ip] = new_socket;
     }
+
 }
 
 void MiProxy::handle_client_connection(int client_sock) {
@@ -121,7 +125,7 @@ void MiProxy::handle_client_connection(int client_sock) {
                inet_ntoa(address.sin_addr), ntohs(address.sin_port));
         // Close the socket and mark as 0 in list for reuse
         close(client_sock);
-        client_sockets.erase(client_sock);
+        clients.erase(inet_ntoa(address.sin_addr));
     } else {
         // send the same message back to the client, hence why it's called
         // "echo_server"
@@ -143,10 +147,10 @@ void MiProxy::run() {
         // add master socket to set
         FD_SET(master_socket, &readfds);
         // add client sockets to set
-        cout << "Number of client sockets: " << client_sockets.size() << endl;
-        for (int client_sock : client_sockets) {
-            FD_SET(client_sock, &readfds);
-            cout << "Adding client socket " << client_sock << " to set..." << endl;
+        cout << "Number of client sockets: " << clients.size() << endl;
+        for (auto client : clients) {
+            FD_SET(client.second, &readfds);
+            cout << "Adding client socket " << client.second << " to set..." << endl;
         }
         cout << "Waiting for activity on sockets..." << endl;
         // wait for an activity on one of the sockets, timeout is NULL,
@@ -163,9 +167,9 @@ void MiProxy::run() {
             handle_master_connection();
         }
         // else it's some IO operation on a client socket
-        for (int client_sock : client_sockets) {
-            if (FD_ISSET(client_sock, &readfds)) {
-                handle_client_connection(client_sock);
+        for (auto client : clients) {
+            if (FD_ISSET(client.second, &readfds)) {
+                handle_client_connection(client.second);
             }
         }
     }
