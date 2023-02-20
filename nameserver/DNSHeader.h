@@ -61,8 +61,8 @@ struct DNSHeader
         iss >> header.ID >>  header.QR >>  header.OPCODE >>  header.AA >> header.TC >>  header.RD >>  header.RA >>
         Z >>  RCODE >>  header.QDCOUNT >>  header.ANCOUNT >>  header.NSCOUNT >> header.ARCOUNT;
 
-        header.Z = Z;
-        header.RCODE = RCODE;
+        header.Z = static_cast<char>(Z);
+        header.RCODE = static_cast<char>(RCODE);
 
         return header;
 	}
