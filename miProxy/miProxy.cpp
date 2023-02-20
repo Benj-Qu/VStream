@@ -114,13 +114,13 @@ const static int BUFFER_SIZE = 1024;
 void MiProxy::handle_client_connection(Connection &conn) {
     cout << "\n---Handling client connection at socket " << conn.socket << "---" << endl;
     char buffer[BUFFER_SIZE + 1];  // data buffer of 1KiB + 1 bytes
-    char *data;
     // Check if it was for closing , and also read the
     // incoming message
     getpeername(conn.socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
     cout << "Starting to read from client socket " << conn.socket << endl;
     ssize_t valread = read(conn.socket, buffer, BUFFER_SIZE);
     cout << "Read " << valread << " bytes from client socket " << conn.socket << endl;
+
     if (valread == 0) {
         // Somebody disconnected, get their details and print
         printf("\n---Client disconnected---\n");
@@ -131,19 +131,10 @@ void MiProxy::handle_client_connection(Connection &conn) {
         clients.erase(inet_ntoa(address.sin_addr));
         return;
     }
+
     buffer[valread] = '\0';
     conn.message += buffer;
     if (conn.message.find("\r\n\r\n") != string::npos){
-        
-        struct sockaddr_in addr;
-        int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-        make_client_sockaddr(&addr, www_ip.c_str(), 80);
-        if (connect(server_socket, (sockaddr *) &addr, sizeof(addr)) == -1) {
-            throw runtime_error("Connecting server socket");
-        }
-
-        send(server_socket, buffer, strlen(buffer), 0);
-        ssize_t rval_server = recv(server_socket, data, 1000, 0);
         // Request message is complete
         handle_request_message(conn);
     }
@@ -154,37 +145,18 @@ void MiProxy::handle_request_message(Connection &conn) {
     cout << conn.message << endl;
     printf("\nReceived from: ip %s , port %d \n",
             inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+
     // forward the message to the server
-    struct sockaddr_in addr;
-    int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    make_client_sockaddr(&addr, www_ip.c_str(), 80);
-    if (connect(server_socket, (sockaddr *) &addr, sizeof(addr)) == -1) {
-        throw runtime_error("Connecting server socket");
-    }
+    // struct sockaddr_in addr;
+    // int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    // make_client_sockaddr(&addr, www_ip.c_str(), 80);
+    // if (connect(server_socket, (sockaddr *) &addr, sizeof(addr)) == -1) {
+    //     throw runtime_error("Connecting server socket");
+    // }
 
-    send(server_socket, buffer, strlen(buffer), 0);
-    ssize_t rval_server = recv(server_socket, data, 1000, 0);
+    // send(server_socket, buffer, strlen(buffer), 0);
+    // ssize_t rval_server = recv(server_socket, data, 1000, 0);
     conn.message.clear();
-}
-
-void make_client_sockaddr(struct sockaddr_in *addr, const char *hostname, int port) {
-	// Step (1): specify socket family.
-	// This is an internet socket.
-	addr->sin_family = AF_INET;
-
-	// Step (2): specify socket address (hostname).
-	// The socket will be a client, so call this unix helper function
-	// to convert a hostname string to a useable `hostent` struct.
-	struct hostent *host = gethostbyname(hostname);
-	if (host == nullptr) {
-		throw runtime_error("unknown host");
-	}
-	memcpy(&(addr->sin_addr), host->h_addr, host->h_length);
-
-	// Step (3): Set the port value.
-	// Use htons to convert from local byte order to network byte order.
-	addr->sin_port = htons(port);
-
 }
 
 void MiProxy::run() {
