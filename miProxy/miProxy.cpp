@@ -100,7 +100,9 @@ void MiProxy::handle_master_connection() {
         cout << "client already exists" << endl;
         clients[ip].client_socket = new_socket;
     } else {
-        clients[ip] = {"", "", new_socket, -1, 0, 0};
+        clients[ip] = {};
+        clients[ip].client_socket = new_socket;
+        clients[ip].server_socket = -1;
     }
 }
 
@@ -168,6 +170,12 @@ void MiProxy::handle_request_message(Connection &conn) {
 
 void MiProxy::handle_server_connection(Connection &conn) {
     cout << "\n---Handling server connection at socket " << conn.server_socket << "---" << endl;
+
+    if (conn.server_message.empty()){
+        // new message from server
+        conn.server_conn_start = steady_clock::now();
+    }
+
     char buffer[BUFFER_SIZE];  // data buffer of 1KB
     // Check if it was for closing , and also read the incoming message
     // Returns the address in address
@@ -203,7 +211,7 @@ void MiProxy::handle_server_connection(Connection &conn) {
 
     // Request message is complete
     cout << "\n---New message---\n";
-    cout << conn.server_message.substr(0, BUFFER_SIZE) << endl;
+    cout << conn.server_message.substr(0, BUFFER_SIZE * 5) << endl;
     printf("\nReceived from: ip %s , port %d \n",
            inet_ntoa(address.sin_addr), ntohs(address.sin_port));
     handle_response_message(conn);
@@ -214,8 +222,41 @@ void MiProxy::handle_response_message(Connection &conn) {
     // send the message
     cout << "Sending message to client..." << endl;
     send_all(conn.client_socket, conn.server_message.c_str(), conn.server_message.size());
+    // check xml file
+    if (conn.available_bitrates.empty()) {
+        parse_xml(conn);
+    } else {
+        // calculate throughput
+        duration<double> time_diff = steady_clock::now() - conn.server_conn_start;
+        double new_throughput = (double)conn.server_message_len / time_diff.count() * 8 / 1000; // kbps
+        conn.current_throughput = alpha * new_throughput + (1 - alpha) * conn.current_throughput;
+        cout << "Time diff: " << time_diff.count() << " s" << endl;
+        cout << "New throughput: " << new_throughput << " kbps" << endl;
+        cout << "Current throughput: " << conn.current_throughput << " kbps" << endl;
+    }
+
     conn.server_message.clear();
     conn.server_message_len = 0;
+}
+
+void MiProxy::parse_xml(Connection &conn) {
+    // check content type
+    if (conn.server_message.find("Content-Type: text/xml") == string::npos) {
+        cout << "---Not a text xml---" << endl;
+        return;
+    }
+    cout << "---Parsing xml---" << endl;
+    size_t br_pos, br_end_pos;
+    while ((br_pos = conn.server_message.find("bitrate=\"")) != string::npos) {
+        br_end_pos = conn.server_message.find("\"", br_pos + 9);
+        string br_str = conn.server_message.substr(br_pos + 9, br_end_pos - br_pos - 9);
+        conn.available_bitrates.push_back(stoi(br_str));
+        conn.server_message.erase(br_pos, br_end_pos - br_pos + 1);
+        cout << "Available bitrate: " << br_str << endl;
+    }
+    sort(conn.available_bitrates.begin(), conn.available_bitrates.end());
+    conn.current_throughput = conn.available_bitrates[0] * 1.5;
+    cout << "initialize current_throughput: " << conn.current_throughput << endl;
 }
 
 int MiProxy::parse_header(Connection &conn) {

@@ -4,7 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
-#include <ctime>
+#include <chrono>
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO, FD_SETSIZE macros
 #include <sys/types.h>
 #include <unistd.h> //close
@@ -14,6 +14,7 @@
 #include <netinet/in.h>
 
 using namespace std;
+using namespace std::chrono;
 
 struct Connection {
     string client_message;
@@ -21,7 +22,9 @@ struct Connection {
     int client_socket;
     int server_socket;
     size_t server_message_len;
-    time_t server_conn_start;
+    time_point<chrono::steady_clock> server_conn_start;
+    double current_throughput;
+    vector<int> available_bitrates; // in kbps
 };
 
 class MiProxy {
@@ -50,6 +53,7 @@ class MiProxy {
     void handle_server_connection(Connection &conn);
     void handle_response_message(Connection &conn);
     int parse_header(Connection &conn);
+    void parse_xml(Connection &conn);
 };
 
 #endif
