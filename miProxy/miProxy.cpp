@@ -98,25 +98,25 @@ void MiProxy::handle_master_connection() {
     // add new socket to the array of sockets
     if (clients.find(ip) != clients.end()) {
         cout << "client already exists" << endl;
-        clients[ip].socket = new_socket;
+        clients[ip].client_socket = new_socket;
     } else {
-        clients[ip] = {"", new_socket};
+        clients[ip] = {"", "", new_socket, -1};
     }
 }
 
 const static int BUFFER_SIZE = 1024;
 
 void MiProxy::handle_client_connection(Connection &conn) {
-    cout << "\n---Handling client connection at socket " << conn.socket << "---" << endl;
+    cout << "\n---Handling client connection at socket " << conn.client_socket << "---" << endl;
     char buffer[BUFFER_SIZE + 1];  // data buffer of 1KiB + 1 bytes
     // Check if it was for closing , and also read the incoming message
     // Returns the address in address
     struct sockaddr_in address;
     int addrlen = sizeof(address);
-    getpeername(conn.socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-    cout << "Starting to read from client socket " << conn.socket << endl;
-    ssize_t valread = read(conn.socket, buffer, BUFFER_SIZE);
-    cout << "Read " << valread << " bytes from client socket " << conn.socket << endl;
+    getpeername(conn.client_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+    cout << "Starting to read from client socket " << conn.client_socket << endl;
+    ssize_t valread = read(conn.client_socket, buffer, BUFFER_SIZE);
+    cout << "Read " << valread << " bytes from client socket " << conn.client_socket << endl;
 
     if (valread == 0) {
         // Somebody disconnected, get their details and print
@@ -124,17 +124,17 @@ void MiProxy::handle_client_connection(Connection &conn) {
         printf("Client disconnected , ip %s , port %d \n",
                inet_ntoa(address.sin_addr), ntohs(address.sin_port));
         // Close the socket and mark as 0 in list for reuse
-        close(conn.socket);
+        close(conn.client_socket);
         clients.erase(inet_ntoa(address.sin_addr));
         return;
     }
 
     buffer[valread] = '\0';
-    conn.message += buffer;
-    if (conn.message.find("\r\n\r\n") != string::npos) {
+    conn.client_message += buffer;
+    if (conn.client_message.find("\r\n\r\n") != string::npos) {
         // Request message is complete
         cout << "\n---New message---\n";
-        cout << conn.message << endl;
+        cout << conn.client_message << endl;
         printf("\nReceived from: ip %s , port %d \n",
                inet_ntoa(address.sin_addr), ntohs(address.sin_port));
         handle_request_message(conn);
@@ -143,25 +143,85 @@ void MiProxy::handle_client_connection(Connection &conn) {
 
 void MiProxy::handle_request_message(Connection &conn) {
     // forward the message to the server
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        throw runtime_error("socket failed");
-    }
+    if (conn.server_socket == -1) {
+        conn.server_socket = socket(AF_INET, SOCK_STREAM, 0);
+        if (conn.server_socket < 0) {
+            throw runtime_error("socket failed");
+        }
 
-    struct sockaddr_in address;
-    if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {
-        throw runtime_error("make_client_sockaddr failed");
-    }
+        struct sockaddr_in address;
+        if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {
+            throw runtime_error("make_client_sockaddr failed");
+        }
 
-    cout << "Connecting to server..." << endl;
-    if (connect(sockfd, (sockaddr *)&address, sizeof(address)) < 0) {
-        throw runtime_error("connect failed");
+        cout << "Connecting to server..." << endl;
+        if (connect(conn.server_socket, (sockaddr *)&address, sizeof(address)) < 0) {
+            throw runtime_error("connect failed");
+        }
     }
 
     // send the message
     cout << "Sending message to server..." << endl;
-    send_all(sockfd, conn.message.c_str(), conn.message.size());
-    conn.message.clear();
+    send_all(conn.server_socket, conn.client_message.c_str(), conn.client_message.size());
+    conn.client_message.clear();
+}
+
+void MiProxy::handle_server_connection(Connection &conn) {
+    cout << "\n---Handling server connection at socket " << conn.server_socket << "---" << endl;
+    char buffer[BUFFER_SIZE + 1];  // data buffer of 1KiB + 1 bytes
+    // Check if it was for closing , and also read the incoming message
+    // Returns the address in address
+    struct sockaddr_in address;
+    int addrlen = sizeof(address);
+    getpeername(conn.server_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+    cout << "Starting to read from server socket " << conn.server_socket << endl;
+    ssize_t valread = read(conn.server_socket, buffer, BUFFER_SIZE);
+    cout << "Read " << valread << " bytes from server socket " << conn.server_socket << endl;
+
+    if (valread == 0) {
+        // Server disconnected, get their details and print
+        printf("\n---Server disconnected---\n");
+        printf("Server disconnected , ip %s , port %d \n",
+               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        // Close the socket and mark as 0 in list for reuse
+        close(conn.server_socket);
+        conn.server_socket = -1;
+        return;
+    }
+
+    buffer[valread] = '\0';
+    conn.server_message += buffer;
+
+    size_t end_pos = conn.server_message.find("\r\n\r\n");
+    if (end_pos == string::npos) {
+        return;
+    }
+    size_t cl_pos = conn.server_message.find("Content-Length: ");
+    size_t con_end_pos = conn.server_message.find("\r\n", cl_pos);
+    if (cl_pos == string::npos || con_end_pos == string::npos) {
+        throw runtime_error("Content-Length bad format");
+    }
+    string cl_str = conn.server_message.substr(cl_pos + 16, con_end_pos - cl_pos - 16);
+    int cl = stoi(cl_str);
+    cout << "Content-Length: " << cl << endl;
+    if (conn.server_message.size() < end_pos + 4 + cl) {
+        return;
+    }
+
+    // Request message is complete
+    cout << "\n---New message---\n";
+    cout << conn.server_message << endl;
+    printf("\nReceived from: ip %s , port %d \n",
+           inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+    handle_response_message(conn);
+}
+
+void MiProxy::handle_response_message(Connection &conn) {
+    // forward the message to the client
+    // send the message
+    cout << "Sending message to client..." << endl;
+    send_all(conn.client_socket, conn.server_message.c_str(), conn.server_message.size());
+    conn.server_message.clear();
 }
 
 void MiProxy::run() {
@@ -171,11 +231,13 @@ void MiProxy::run() {
 
         // add master socket to set
         FD_SET(master_socket, &readfds);
-        // add client sockets to set
+        // add client and server sockets to set
         cout << "Number of client sockets: " << clients.size() << endl;
         for (auto client : clients) {
-            FD_SET(client.second.socket, &readfds);
-            cout << "Adding client socket " << client.second.socket << " to set..." << endl;
+            FD_SET(client.second.client_socket, &readfds);
+            if (client.second.server_socket != -1) {
+                FD_SET(client.second.server_socket, &readfds);
+            }
         }
         cout << "Waiting for activity on sockets..." << endl;
         // wait for an activity on one of the sockets, timeout is NULL,
@@ -193,8 +255,11 @@ void MiProxy::run() {
         }
         // else it's some IO operation on a client socket
         for (auto &client : clients) {
-            if (FD_ISSET(client.second.socket, &readfds)) {
+            if (FD_ISSET(client.second.client_socket, &readfds)) {
                 handle_client_connection(client.second);
+            } else if (client.second.server_socket != -1 &&
+                       FD_ISSET(client.second.server_socket, &readfds)) {
+                handle_server_connection(client.second);
             }
         }
     }

@@ -15,8 +15,10 @@
 using namespace std;
 
 struct Connection {
-    string message;
-    int socket;
+    string client_message;
+    string server_message;
+    int client_socket;
+    int server_socket;
 };
 
 class MiProxy {
@@ -42,6 +44,8 @@ class MiProxy {
     void handle_master_connection();
     void handle_client_connection(Connection &conn);
     void handle_request_message(Connection &conn);
+    void handle_server_connection(Connection &conn);
+    void handle_response_message(Connection &conn);
 };
 
 #endif
