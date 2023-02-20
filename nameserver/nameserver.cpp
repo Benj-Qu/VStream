@@ -1,8 +1,18 @@
 #include "utils.h"
 
 int main(int argc, char **argv) {
+    // Read Arguments
     Info info(argc, argv);
-    std::cout << info.mode << info.port 
-              << info.servers << info.log << std::endl;
+    // Operate
+    switch (info.getMode()) {
+        case Mode::RR:
+            RoundRobin(info.getServers());
+            break;
+        case Mode::GEO:
+            break;
+        default:
+            std::cerr << "Fail to Recognize Load Balancer" << std::endl;
+            exit(1);
+    }
     return 0;
 }
