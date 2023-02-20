@@ -14,6 +14,11 @@
 
 using namespace std;
 
+struct Connection {
+    string message;
+    int socket;
+};
+
 class MiProxy {
    public:
     void get_options(int argc, char* argv[]);
@@ -30,13 +35,14 @@ class MiProxy {
     string log_path;
 
     fd_set readfds;
-    map<string, int> clients; // <ip, socket>
+    map<string, Connection> clients; // <ip, Connection>
     int master_socket, addrlen;
     struct sockaddr_in address;
 
     void init_master_socket();
     void handle_master_connection();
-    void handle_client_connection(int client_socket);
+    void handle_client_connection(Connection &conn);
+    void handle_request_message(Connection &conn);
 };
 
 #endif

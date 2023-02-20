@@ -104,39 +104,45 @@ void MiProxy::handle_master_connection() {
     if (clients.find(ip) != clients.end()) {
         cout << "Error: client already exists" << endl;
     } else {
-        clients[ip] = new_socket;
+        clients[ip] = {"", new_socket};
     }
-
 }
 
-void MiProxy::handle_client_connection(int client_sock) {
-    cout << "\n---Handling client connection at socket " << client_sock << "---" << endl;
-    char buffer[1025];  // data buffer of 1KiB + 1 bytes
+const static int BUFFER_SIZE = 1024;
+
+void MiProxy::handle_client_connection(Connection &conn) {
+    cout << "\n---Handling client connection at socket " << conn.socket << "---" << endl;
+    char buffer[BUFFER_SIZE + 1];  // data buffer of 1KiB + 1 bytes
     // Check if it was for closing , and also read the
     // incoming message
-    getpeername(client_sock, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-    cout << "Starting to read from client socket " << client_sock << endl;
-    ssize_t valread = read(client_sock, buffer, 1024);
-    cout << "Read " << valread << " bytes from client socket " << client_sock << endl;
+    getpeername(conn.socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+    cout << "Starting to read from client socket " << conn.socket << endl;
+    ssize_t valread = read(conn.socket, buffer, BUFFER_SIZE);
+    cout << "Read " << valread << " bytes from client socket " << conn.socket << endl;
     if (valread == 0) {
         // Somebody disconnected, get their details and print
         printf("\n---Client disconnected---\n");
         printf("Client disconnected , ip %s , port %d \n",
                inet_ntoa(address.sin_addr), ntohs(address.sin_port));
         // Close the socket and mark as 0 in list for reuse
-        close(client_sock);
+        close(conn.socket);
         clients.erase(inet_ntoa(address.sin_addr));
-    } else {
-        // send the same message back to the client, hence why it's called
-        // "echo_server"
-        buffer[valread] = '\0';
-        printf("\n---New message---\n");
-        printf("Message %s\n", buffer);
-        printf("Received from: ip %s , port %d \n",
-               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-        // TODO: WHEN DOING ASSIGNMENT 2 REMEMBER TO REMOVE THIS LINE!
-        // send(client_sock, buffer, strlen(buffer), 0);
+        return;
     }
+    buffer[valread] = '\0';
+    conn.message += buffer;
+    if (conn.message.find("\r\n\r\n") != string::npos){
+        // Request message is complete
+        handle_request_message(conn);
+    }
+}
+
+void MiProxy::handle_request_message(Connection &conn) {
+    cout << "\n---New message---\n";
+    cout << conn.message << endl;
+    printf("\nReceived from: ip %s , port %d \n",
+            inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+    conn.message.clear();
 }
 
 void MiProxy::run() {
@@ -149,8 +155,8 @@ void MiProxy::run() {
         // add client sockets to set
         cout << "Number of client sockets: " << clients.size() << endl;
         for (auto client : clients) {
-            FD_SET(client.second, &readfds);
-            cout << "Adding client socket " << client.second << " to set..." << endl;
+            FD_SET(client.second.socket, &readfds);
+            cout << "Adding client socket " << client.second.socket << " to set..." << endl;
         }
         cout << "Waiting for activity on sockets..." << endl;
         // wait for an activity on one of the sockets, timeout is NULL,
@@ -167,8 +173,8 @@ void MiProxy::run() {
             handle_master_connection();
         }
         // else it's some IO operation on a client socket
-        for (auto client : clients) {
-            if (FD_ISSET(client.second, &readfds)) {
+        for (auto &client : clients) {
+            if (FD_ISSET(client.second.socket, &readfds)) {
                 handle_client_connection(client.second);
             }
         }
