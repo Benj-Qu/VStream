@@ -4,12 +4,14 @@
 #include <errno.h>
 #include <netdb.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <string>
-#include <string.h>
+
+#include "helpers.h"
 
 void MiProxy::get_options(int argc, char *argv[]) {
     vector<string> args(argv, argv + argc);
@@ -58,14 +60,11 @@ void MiProxy::init_master_socket() {
     }
 
     // type of socket created
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(listen_port);
-
-    addrlen = sizeof(address);
+    struct sockaddr_in address;
+    make_server_sockaddr(&address, listen_port);
 
     // bind the socket to localhost listen_port
-    if (bind(master_socket, (sockaddr *)&address, addrlen) < 0) {
+    if (bind(master_socket, (sockaddr *)&address, sizeof(address)) < 0) {
         throw runtime_error("bind failed");
     }
     printf("---Listening on port %d---\n", listen_port);
@@ -82,6 +81,9 @@ void MiProxy::init() {
 }
 
 void MiProxy::handle_master_connection() {
+    // write new socket info to address
+    struct sockaddr_in address;
+    int addrlen = sizeof(address);
     int new_socket = accept(master_socket, (sockaddr *)&address, (socklen_t *)&addrlen);
     if (new_socket < 0) {
         throw runtime_error("accept");
@@ -93,17 +95,10 @@ void MiProxy::handle_master_connection() {
     printf("socket fd is %d , ip is : %s , port : %d \n", new_socket,
            ip.c_str(), ntohs(address.sin_port));
 
-    // send new connection greeting message
-    // TODO: REMOVE THIS CALL TO SEND WHEN DOING THE ASSIGNMENT 2.
-    // ssize_t send_rval = send(new_socket, message, strlen(message), 0);
-    // if (send_rval != strlen(message)) {
-    //     perror("send");
-    // }
-    // printf("Welcome message sent successfully\n");
-
     // add new socket to the array of sockets
     if (clients.find(ip) != clients.end()) {
-        cout << "Error: client already exists" << endl;
+        cout << "client already exists" << endl;
+        clients[ip].socket = new_socket;
     } else {
         clients[ip] = {"", new_socket};
     }
@@ -114,8 +109,10 @@ const static int BUFFER_SIZE = 1024;
 void MiProxy::handle_client_connection(Connection &conn) {
     cout << "\n---Handling client connection at socket " << conn.socket << "---" << endl;
     char buffer[BUFFER_SIZE + 1];  // data buffer of 1KiB + 1 bytes
-    // Check if it was for closing , and also read the
-    // incoming message
+    // Check if it was for closing , and also read the incoming message
+    // Returns the address in address
+    struct sockaddr_in address;
+    int addrlen = sizeof(address);
     getpeername(conn.socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
     cout << "Starting to read from client socket " << conn.socket << endl;
     ssize_t valread = read(conn.socket, buffer, BUFFER_SIZE);
@@ -134,28 +131,36 @@ void MiProxy::handle_client_connection(Connection &conn) {
 
     buffer[valread] = '\0';
     conn.message += buffer;
-    if (conn.message.find("\r\n\r\n") != string::npos){
+    if (conn.message.find("\r\n\r\n") != string::npos) {
         // Request message is complete
+        cout << "\n---New message---\n";
+        cout << conn.message << endl;
+        printf("\nReceived from: ip %s , port %d \n",
+               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
         handle_request_message(conn);
     }
 }
 
 void MiProxy::handle_request_message(Connection &conn) {
-    cout << "\n---New message---\n";
-    cout << conn.message << endl;
-    printf("\nReceived from: ip %s , port %d \n",
-            inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-
     // forward the message to the server
-    // struct sockaddr_in addr;
-    // int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    // make_client_sockaddr(&addr, www_ip.c_str(), 80);
-    // if (connect(server_socket, (sockaddr *) &addr, sizeof(addr)) == -1) {
-    //     throw runtime_error("Connecting server socket");
-    // }
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        throw runtime_error("socket failed");
+    }
 
-    // send(server_socket, buffer, strlen(buffer), 0);
-    // ssize_t rval_server = recv(server_socket, data, 1000, 0);
+    struct sockaddr_in address;
+    if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {
+        throw runtime_error("make_client_sockaddr failed");
+    }
+
+    cout << "Connecting to server..." << endl;
+    if (connect(sockfd, (sockaddr *)&address, sizeof(address)) < 0) {
+        throw runtime_error("connect failed");
+    }
+
+    // send the message
+    cout << "Sending message to server..." << endl;
+    send_all(sockfd, conn.message.c_str(), conn.message.size());
     conn.message.clear();
 }
 

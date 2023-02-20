@@ -36,8 +36,7 @@ class MiProxy {
 
     fd_set readfds;
     map<string, Connection> clients; // <ip, Connection>
-    int master_socket, addrlen;
-    struct sockaddr_in address;
+    int master_socket;
 
     void init_master_socket();
     void handle_master_connection();

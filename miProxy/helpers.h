@@ -88,3 +88,14 @@ int make_client_sockaddr(struct sockaddr_in *addr, const char *hostname, int por
 	// Use ntohs to convert from network byte order to host byte order.
 	return ntohs(addr.sin_port);
  }
+
+ void send_all(int client_socket, const char *data, size_t data_size) {
+    size_t bytes_sent_total = 0;
+
+    while (bytes_sent_total < data_size) {
+        int bytes_sent = (int)send(client_socket, data + bytes_sent_total, data_size - bytes_sent_total, 0);
+        if (bytes_sent < 0)
+            throw runtime_error("send failed");
+		bytes_sent_total += bytes_sent;
+    }
+}
