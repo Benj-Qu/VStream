@@ -108,7 +108,7 @@ const static int BUFFER_SIZE = 1024;
 
 void MiProxy::handle_client_connection(Connection &conn) {
     cout << "\n---Handling client connection at socket " << conn.client_socket << "---" << endl;
-    char buffer[BUFFER_SIZE + 1];  // data buffer of 1KiB + 1 bytes
+    char buffer[BUFFER_SIZE];  // data buffer of 1KiB + 1 bytes
     // Check if it was for closing , and also read the incoming message
     // Returns the address in address
     struct sockaddr_in address;
@@ -129,8 +129,7 @@ void MiProxy::handle_client_connection(Connection &conn) {
         return;
     }
 
-    buffer[valread] = '\0';
-    conn.client_message += buffer;
+    conn.client_message.append(buffer, valread);
     if (conn.client_message.find("\r\n\r\n") != string::npos) {
         // Request message is complete
         cout << "\n---New message---\n";
@@ -168,7 +167,7 @@ void MiProxy::handle_request_message(Connection &conn) {
 
 void MiProxy::handle_server_connection(Connection &conn) {
     cout << "\n---Handling server connection at socket " << conn.server_socket << "---" << endl;
-    char buffer[BUFFER_SIZE + 1];  // data buffer of 1KiB + 1 bytes
+    char buffer[BUFFER_SIZE];  // data buffer of 1KiB + 1 bytes
     // Check if it was for closing , and also read the incoming message
     // Returns the address in address
     struct sockaddr_in address;
@@ -189,28 +188,32 @@ void MiProxy::handle_server_connection(Connection &conn) {
         return;
     }
 
-    buffer[valread] = '\0';
-    conn.server_message += buffer;
+    conn.server_message.append(buffer, valread);
 
     size_t end_pos = conn.server_message.find("\r\n\r\n");
     if (end_pos == string::npos) {
+        cout << "header not complete" << endl;
         return;
     }
     size_t cl_pos = conn.server_message.find("Content-Length: ");
     size_t con_end_pos = conn.server_message.find("\r\n", cl_pos);
     if (cl_pos == string::npos || con_end_pos == string::npos) {
-        throw runtime_error("Content-Length bad format");
+        cout << "---No Content-Length header---" << endl;
+        cout << conn.server_message << endl;
+        return;
     }
     string cl_str = conn.server_message.substr(cl_pos + 16, con_end_pos - cl_pos - 16);
     int cl = stoi(cl_str);
     cout << "Content-Length: " << cl << endl;
     if (conn.server_message.size() < end_pos + 4 + cl) {
+        cout << "Received " << conn.server_message.size() << " bytes, waiting for "
+             << end_pos + 4 + cl - conn.server_message.size() << " more bytes..." << endl;
         return;
     }
 
     // Request message is complete
     cout << "\n---New message---\n";
-    cout << conn.server_message << endl;
+    cout << conn.server_message.substr(0, BUFFER_SIZE) << endl;
     printf("\nReceived from: ip %s , port %d \n",
            inet_ntoa(address.sin_addr), ntohs(address.sin_port));
     handle_response_message(conn);
