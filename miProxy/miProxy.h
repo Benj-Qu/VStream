@@ -37,6 +37,7 @@ class MiProxy {
     void init_master_socket();
     void handle_master_connection();
     void handle_client_connection(int client_socket);
+    void make_client_sockaddr(struct sockaddr_in *addr, const char *hostname, int port);
 };
 
 #endif
