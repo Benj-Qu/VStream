@@ -76,7 +76,6 @@ void MiProxy::init_master_socket() {
 }
 
 void MiProxy::init() {
-    client_sockets.clear();
     init_master_socket();
     puts("Waiting for connections ...");
 }
@@ -102,14 +101,18 @@ void MiProxy::handle_master_connection() {
 
     // add new socket to the array of sockets
     client_sockets.push_back(new_socket);
+    printf("Adding to list of sockets as %d\n", client_sockets[0]);
 }
 
 void MiProxy::handle_client_connection(int client_sock) {
+    cout << "Handling client connection at socket " << client_sock << endl;
     char buffer[1025];  // data buffer of 1KiB + 1 bytes
     // Check if it was for closing , and also read the
     // incoming message
     getpeername(client_sock, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+    cout << "Starting to read from client socket " << client_sock << endl;
     ssize_t valread = read(client_sock, buffer, 1024);
+    cout << "Read " << valread << " from client socket " << client_sock << endl;
     if (valread == 0) {
         // Somebody disconnected, get their details and print
         printf("\n---Client disconnected---\n");
@@ -138,10 +141,8 @@ void MiProxy::run() {
         FD_ZERO(&readfds);
 
         // add master socket to set
-        cout << "Adding master socket to set..." << endl;
         FD_SET(master_socket, &readfds);
         // add client sockets to set
-        cout << "Adding client sockets to set..." << endl;
         cout << "Number of client sockets: " << client_sockets.size() << endl;
         for (int client_sock : client_sockets) {
             FD_SET(client_sock, &readfds);
