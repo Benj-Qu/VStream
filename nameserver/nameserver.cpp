@@ -122,6 +122,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	DNSHeader header = DNSHeader::decode(receive_all(connectionfd, headerSize));
 
 	std::cout << "Successfully Received DNS Header" << std::endl;
+	std::cout << DNSHeader::encode(header) << std::endl;
 
 	// Receive DNS Question Size
 	int questionSize;
@@ -133,6 +134,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	string domain = question.QNAME;
 
 	std::cout << "Successfully Received DNS Question" << std::endl;
+	std::cout << DNSQuestion::encode(question) << std::endl;
 
 	// TODO: Check QNAME is video.cse.umich.edu
 
@@ -154,7 +156,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	send_all(connectionfd, responseHeader.c_str());
 
 	std::cout << "Successfully Sent DNS Header" << std::endl;
-	std::cout << sizeof(responseHeader) << std::endl << responseHeader << std::endl;
+	std::cout << responseHeader << std::endl;
 
 	// Edit DNS Record
 	DNSRecord record;
@@ -174,7 +176,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	send_all(connectionfd, responseRecord.c_str());
 
 	std::cout << "Successfully Sent DNS Record" << std::endl;
-	std::cout << sizeof(responseRecord) << std::endl << responseRecord << std::endl;
+	std::cout << responseRecord << std::endl;
 
 	// Close connection
     close(connectionfd);
