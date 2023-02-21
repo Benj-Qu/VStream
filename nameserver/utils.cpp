@@ -1,6 +1,24 @@
 #include "utils.h"
 
+
 #define CACHE_SIZE 32
+
+
+// Select Server
+
+string selectServer(Info* info, RoundRobin* rr, Geography* geo, string client) {
+    switch (info->getMode()) {
+        case Mode::RR:
+            return rr->next();
+            break;
+        case Mode::GEO:
+            return geo->findServer(client);
+            break;
+        default:
+            std::cerr << "Fail to Recognize Load Balancer" << std::endl;
+            exit(1);
+    }
+}
 
 // Info
 

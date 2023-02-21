@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <map>
 #include <queue>
@@ -37,11 +38,11 @@ enum Mode {RR, GEO};
 
 class Info {
 private:
-    void usage();
     Mode mode;
     int port;
     string servers;
     string log;
+    void usage();
 
 public:
     Info(int argc, char** argv);
@@ -58,8 +59,11 @@ class RoundRobin {
 private:
     vector<string> hosts;
     int index;
+
 public:
+    RoundRobin() : index(0) {};
     RoundRobin(string filename);
+    // Get Next Server
     string next();
 };
 
@@ -99,9 +103,13 @@ private:
     unordered_map<string, string> cache;
 
 public:
+    Geography() {};
     Geography(string filename);
     ~Geography();
+    // Find Nearest Server
     string findServer(string client);
 };
+
+string selectServer(Info* info, RoundRobin* rr, Geography* geo, string client);
 
 #endif
