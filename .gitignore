@@ -1,4 +1,6 @@
 # Test directory
 /[Tt]est/
+/nameserver/*.txt
+/nameserver/queryDNS
 *.o
 .vscode
