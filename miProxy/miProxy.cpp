@@ -77,6 +77,7 @@ void MiProxy::init_master_socket() {
 
 void MiProxy::init() {
     init_master_socket();
+    log.open(log_path);
     puts("Waiting for connections ...");
 }
 
@@ -103,6 +104,7 @@ void MiProxy::handle_master_connection() {
         clients[ip] = {};
         clients[ip].client_socket = new_socket;
         clients[ip].server_socket = -1;
+        clients[ip].client_ip = ip;
     }
 }
 
@@ -123,11 +125,10 @@ void MiProxy::handle_client_connection(Connection &conn) {
     if (valread == 0) {
         // Somebody disconnected, get their details and print
         printf("\n---Client disconnected---\n");
-        printf("Client disconnected , ip %s , port %d \n",
-               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        printf("Client disconnected , ip %s , port %d \n", conn.client_ip.c_str(), ntohs(address.sin_port));
         // Close the socket and mark as 0 in list for reuse
         close(conn.client_socket);
-        clients.erase(inet_ntoa(address.sin_addr));
+        clients.erase(conn.client_ip);
         return;
     }
 
@@ -136,8 +137,7 @@ void MiProxy::handle_client_connection(Connection &conn) {
         // Request message is complete
         cout << "\n---New message---\n";
         cout << conn.client_message << endl;
-        printf("\nReceived from: ip %s , port %d \n",
-               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        printf("\nReceived from: ip %s , port %d \n", conn.client_ip.c_str(), ntohs(address.sin_port));
         handle_request_message(conn);
     }
 }
@@ -195,16 +195,17 @@ void MiProxy::parse_bitrate(Connection &conn) {
     }
     double bitrate_max = conn.current_throughput / 1.5;
     cout << "Max bitrate allowed: " << bitrate_max << "kbps" << endl;
-    int best_bitrate = conn.available_bitrates[0];
+    conn.current_bitrate = conn.available_bitrates[0];
     for (auto br : conn.available_bitrates) {
         if (br <= bitrate_max) {
-            best_bitrate = br;
+            conn.current_bitrate = br;
         } else {
             break;
         }
     }
-    cout << "Current bitrate: " << best_bitrate << "kbps" << endl;
-    conn.client_message = msg.substr(0, path_start_pos + 1) + to_string(best_bitrate) + msg.substr(pos_s);
+    cout << "Current bitrate: " << conn.current_bitrate << "kbps" << endl;
+    msg = msg.substr(0, path_start_pos + 1) + to_string(conn.current_bitrate) + msg.substr(pos_s);
+    conn.chunkname = msg.substr(path_start_pos + 1, msg.find(" HTTP/1.1") - path_start_pos - 1);
     cout << "\n---Modified message---\n";
     cout << conn.client_message << endl;
 }
@@ -223,6 +224,8 @@ void MiProxy::handle_server_connection(Connection &conn) {
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     getpeername(conn.server_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+    conn.server_ip = inet_ntoa(address.sin_addr);
+    conn.server_port = ntohs(address.sin_port);
     cout << "Starting to read from server socket " << conn.server_socket << endl;
     ssize_t valread = read(conn.server_socket, buffer, BUFFER_SIZE);
     cout << "Read " << valread << " bytes from server socket " << conn.server_socket << endl;
@@ -230,8 +233,7 @@ void MiProxy::handle_server_connection(Connection &conn) {
     if (valread == 0) {
         // Server disconnected, get their details and print
         printf("\n---Server disconnected---\n");
-        printf("Server disconnected , ip %s , port %d \n",
-               inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        printf("Server disconnected , ip %s , port %d \n", conn.server_ip.c_str(), conn.server_port);
         // Close the socket and mark as 0 in list for reuse
         close(conn.server_socket);
         conn.server_socket = -1;
@@ -253,8 +255,7 @@ void MiProxy::handle_server_connection(Connection &conn) {
     // Request message is complete
     cout << "\n---New message---\n";
     cout << conn.server_message.substr(0, BUFFER_SIZE) << endl;
-    printf("\nReceived from: ip %s , port %d \n",
-           inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+    printf("\nReceived from: ip %s , port %d \n", conn.server_ip.c_str(), conn.server_port);
     handle_response_message(conn);
 }
 
@@ -293,6 +294,15 @@ void MiProxy::update_throughput(Connection &conn) {
     cout << "Time diff: " << time_diff.count() << " s" << endl;
     cout << "New throughput: " << new_throughput << " kbps" << endl;
     cout << "Current throughput: " << conn.current_throughput << " kbps" << endl;
+
+    // logging
+    log << conn.client_ip << " "
+        << conn.chunkname << " "
+        << conn.server_ip << " "
+        << (float)time_diff.count() << " "
+        << new_throughput << " "
+        << conn.current_throughput << " "
+        << conn.current_bitrate << endl;
 }
 
 void MiProxy::parse_xml(Connection &conn) {

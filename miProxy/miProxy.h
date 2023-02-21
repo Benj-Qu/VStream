@@ -1,17 +1,18 @@
 #ifndef MIPROXY_H
 #define MIPROXY_H
 
-#include <iostream>
-#include <vector>
-#include <map>
-#include <chrono>
-#include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO, FD_SETSIZE macros
-#include <sys/types.h>
-#include <unistd.h> //close
-#include <sys/socket.h>
-#include <sys/select.h>
-
 #include <netinet/in.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/time.h>  //FD_SET, FD_ISSET, FD_ZERO, FD_SETSIZE macros
+#include <sys/types.h>
+#include <unistd.h>  //close
+
+#include <chrono>
+#include <iostream>
+#include <fstream>
+#include <map>
+#include <vector>
 
 using namespace std;
 using namespace std::chrono;
@@ -24,13 +25,18 @@ struct Connection {
     size_t server_message_len;
     time_point<chrono::steady_clock> server_conn_start;
     double current_throughput;
-    vector<int> available_bitrates; // in kbps
+    vector<int> available_bitrates;  // in kbps
     string no_list_message;
+    string chunkname;
+    string server_ip;
+    int server_port;
+    string client_ip; // also used as key in clients map
+    int current_bitrate;
 };
 
 class MiProxy {
    public:
-    void get_options(int argc, char* argv[]);
+    void get_options(int argc, char *argv[]);
     void init();
     void run();
 
@@ -44,8 +50,9 @@ class MiProxy {
     string log_path;
 
     fd_set readfds;
-    map<string, Connection> clients; // <ip, Connection>
+    map<string, Connection> clients;  // <client_ip, Connection>
     int master_socket;
+    ofstream log;
 
     void init_master_socket();
     void handle_master_connection();
