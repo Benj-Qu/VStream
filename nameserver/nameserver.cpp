@@ -141,19 +141,24 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Write Logfile
 	log << clientIP << " " << domain << " " << ip << std::endl;
+	std::cout << clientIP << " " << domain << " " << ip << std::endl;
 
 	// Edit DNS Header
 	update_header(&header);
 	string responseHeader = DNSHeader::encode(header);
 
+	std::cout << "Successfully Encoded DNS Header" << std::endl;
+
 	// Send DNS Header Size
-	headerSize = htonl(sizeof(responseHeader.c_str()));
+	headerSize = htonl(static_cast<uint32_t>(strlen(responseHeader.c_str())));
 	send(connectionfd, static_cast<void*>(&headerSize), sizeof(headerSize), 0);
+
+	std::cout << "Successfully Sent DNS Header Size " << static_cast<uint32_t>(strlen(responseHeader.c_str())) << std::endl;
 
 	// Send DNS Header
 	send_all(connectionfd, responseHeader.c_str());
 
-	std::cout << "Successfully Sent DNS Header with size " << sizeof(responseHeader.c_str()) << std::endl;
+	std::cout << "Successfully Sent DNS Header" << std::endl;
 
 	// Edit DNS Record
 	DNSRecord record;
@@ -165,14 +170,18 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	record.RDLENGTH = static_cast<ushort>(ip.length());
 	string responseRecord = DNSRecord::encode(record);
 
+	std::cout << "Successfully Encoded DNS Record" << std::endl;
+
 	// Send DNS Record Size
-	int recordSize = htonl(sizeof(responseRecord.c_str()));
+	int recordSize = htonl(static_cast<uint32_t>(strlen(responseRecord.c_str())));
 	send(connectionfd, static_cast<void*>(&recordSize), sizeof(recordSize), 0);
+
+	std::cout << "Successfully Sent DNS Record Size " << static_cast<uint32_t>(strlen(responseRecord.c_str())) << std::endl;
 
 	// Send DNS Record
 	send_all(connectionfd, responseRecord.c_str());
 
-	std::cout << "Successfully Sent DNS Record with size" << sizeof(responseRecord.c_str()) << std::endl;
+	std::cout << "Successfully Sent DNS Record" << std::endl;
 
 	// Close connection
     close(connectionfd);
@@ -185,6 +194,7 @@ void send_all(int connectionfd, const char *message) {
 	// Send message to remote server
 	// Call send() enough times to send all the data
 	size_t message_len = strlen(message);
+	std::cout << "Sending " << message_len << " bytes" << std::endl;
 	size_t sent = 0;
 	do {
 		ssize_t sval = send(connectionfd, message + sent, message_len - sent, 0);
@@ -193,6 +203,7 @@ void send_all(int connectionfd, const char *message) {
 			exit(1);
 		}
 		sent += sval;
+		std::cout << sval << " bytes sent" << std::endl;
 	} while (sent < message_len);
 }
 
