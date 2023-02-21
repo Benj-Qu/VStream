@@ -102,6 +102,8 @@ int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size) {
 		std::cout << "Server connected to client " << ip << "..." << std::endl;
 
 		handle_connection(connectionfd, log, info, rr, geo, ip);
+
+		std::cout << "Server finished serving client " << ip << "..." << std::endl;
 	}
 }
 
@@ -119,6 +121,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Receive DNS Header
 	DNSHeader header = DNSHeader::decode(receive_all(connectionfd, headerSize));
 
+	printf("Successfully Received DNS Header\n");
+
 	// Receive DNS Question Size
 	int questionSize;
 	recv(connectionfd, &questionSize, sizeof(questionSize), 0);
@@ -127,6 +131,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Receive DNS Question
 	DNSQuestion question = DNSQuestion::decode(receive_all(connectionfd, questionSize));
 	string domain = question.QNAME;
+
+	printf("Successfully Received DNS Question\n");
 
 	// TODO: Check QNAME is video.cse.umich.edu
 
@@ -147,6 +153,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Send DNS Header
 	send_all(connectionfd, responseHeader.c_str());
 
+	printf("Successfully Sent DNS Header\n");
+
 	// Edit DNS Record
 	DNSRecord record;
 	record.TYPE = 1;
@@ -163,6 +171,11 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Send DNS Record
 	send_all(connectionfd, responseRecord.c_str());
+
+	printf("Successfully Sent DNS Record\n");
+
+	// Close connection
+    close(connectionfd);
 }
 
 /**
