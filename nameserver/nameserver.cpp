@@ -159,7 +159,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	std::cout << "Successfully Sent DNS Header Size " << ntohl(headerSize) << std::endl;
 
 	// Send DNS Header
-	send_all(connectionfd, responseHeader.c_str(), static_cast<int>(strlen(responseHeader.c_str())));
+	send_all(connectionfd, responseHeader.c_str(), ntohl(headerSize));
 
 	std::cout << "Successfully Sent DNS Header" << std::endl;
 
@@ -185,7 +185,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	std::cout << "Successfully Sent DNS Record Size " << ntohl(recordSize) << std::endl;
 
 	// Send DNS Record
-	send_all(connectionfd, responseRecord.c_str(), static_cast<int>(strlen(responseRecord.c_str())));
+	send_all(connectionfd, responseRecord.c_str(), ntohl(recordSize));
 
 	std::cout << "Successfully Sent DNS Record" << std::endl;
 
