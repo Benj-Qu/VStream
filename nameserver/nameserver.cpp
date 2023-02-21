@@ -117,24 +117,32 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Receive DNS Header Size
 	int headerSize;
-	recv(connectionfd, &headerSize, sizeof(headerSize), 0);
+	if (recv(connectionfd, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
+		std::cerr << "Error reading stream message" << std::endl;
+		exit(1);
+	}
 	headerSize = ntohl(headerSize);
 
 	// Receive DNS Header
 	DNSHeader header = DNSHeader::decode(receive_all(connectionfd, headerSize));
 
-	std::cout << "Successfully Received DNS Header" << std::endl;
+	std::cout << "Successfully Received DNS Header with size " << headerSize << std::endl;
+	std::cout << DNSHeader::encode(header) << std::endl;
 
 	// Receive DNS Question Size
 	int questionSize;
-	recv(connectionfd, &questionSize, sizeof(questionSize), 0);
+	if (recv(connectionfd, &questionSize, sizeof(questionSize), 0) != sizeof(questionSize)) {
+		std::cerr << "Error reading stream message" << std::endl;
+		exit(1);
+	}
 	questionSize = ntohl(questionSize);
 
 	// Receive DNS Question
 	DNSQuestion question = DNSQuestion::decode(receive_all(connectionfd, questionSize));
 	string domain = question.QNAME;
 
-	std::cout << "Successfully Received DNS Question" << std::endl;
+	std::cout << "Successfully Received DNS Question with size " << questionSize << std::endl;
+	std::cout << DNSQuestion::encode(question) << std::endl;
 
 	// TODO: Check QNAME is video.cse.umich.edu
 
