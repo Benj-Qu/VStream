@@ -11,7 +11,7 @@ static const int MAX_MESSAGE_SIZE = 256;
 
 int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size = 10);
 void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* rr, Geography* geo, string clientIP);
-void send_all(int connectionfd, const char *message);
+void send_all(int connectionfd, const char *message, int size);
 string receive_all(int connectionfd, int size);
 void make_server_sockaddr(struct sockaddr_in *addr, int port);
 int get_port_number(int sockfd);
@@ -141,8 +141,6 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Find the Response IP
 	string ip = selectServer(info, rr, geo, clientIP);
 
-	// Write Logfile
-	log << clientIP << " " << domain << " " << ip << std::endl;
 	std::cout << clientIP << " " << domain << " " << ip << std::endl;
 
 	// Edit DNS Header
@@ -155,10 +153,10 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	headerSize = htonl(static_cast<uint32_t>(strlen(responseHeader.c_str())));
 	send(connectionfd, static_cast<void*>(&headerSize), sizeof(headerSize), 0);
 
-	std::cout << "Successfully Sent DNS Header Size " << static_cast<uint32_t>(strlen(responseHeader.c_str())) << std::endl;
+	std::cout << "Successfully Sent DNS Header Size " << ntohl(headerSize) << std::endl;
 
 	// Send DNS Header
-	send_all(connectionfd, responseHeader.c_str());
+	send_all(connectionfd, responseHeader.c_str(), ntohl(headerSize));
 
 	std::cout << "Successfully Sent DNS Header" << std::endl;
 
@@ -178,35 +176,38 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	int recordSize = htonl(static_cast<uint32_t>(strlen(responseRecord.c_str())));
 	send(connectionfd, static_cast<void*>(&recordSize), sizeof(recordSize), 0);
 
-	std::cout << "Successfully Sent DNS Record Size " << static_cast<uint32_t>(strlen(responseRecord.c_str())) << std::endl;
+	std::cout << "Successfully Sent DNS Record Size " << ntohl(recordSize) << std::endl;
 
 	// Send DNS Record
-	send_all(connectionfd, responseRecord.c_str());
+	send_all(connectionfd, responseRecord.c_str(), ntohl(recordSize));
 
 	std::cout << "Successfully Sent DNS Record" << std::endl;
 
 	// Close connection
     close(connectionfd);
+
+	// Write Logfile
+	log << clientIP << " " << domain << " " << ip << std::endl;
 }
 
 /**
  * Sends a string message to the server.
  */
-void send_all(int connectionfd, const char *message) {	
+void send_all(int connectionfd, const char *message, int size) {
 	// Send message to remote server
 	// Call send() enough times to send all the data
-	size_t message_len = strlen(message);
-	std::cout << "Sending " << message_len << " bytes" << std::endl;
+	std::cout << "Sending " << size << " bytes" << std::endl;
 	size_t sent = 0;
 	do {
-		ssize_t sval = send(connectionfd, message + sent, message_len - sent, 0);
+		std::cout << size - sent << " bytes remaining" << std::endl;
+		ssize_t sval = send(connectionfd, message + sent, size - sent, 0);
 		if (sval == -1) {
 			perror("Error sending on stream socket");
 			exit(1);
 		}
 		sent += sval;
 		std::cout << sval << " bytes sent" << std::endl;
-	} while (sent < message_len);
+	} while (sent < static_cast<size_t>(size));
 }
 
 /**
