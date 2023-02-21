@@ -105,6 +105,8 @@ int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size) {
 
 		std::cout << "Server finished serving client " << ip << "..." << std::endl;
 	}
+
+	close(sockfd);
 }
 
 /**
@@ -147,7 +149,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	update_header(&header);
 	string responseHeader = DNSHeader::encode(header);
 
-	std::cout << "Successfully Encoded DNS Header" << std::endl;
+	std::cout << "Successfully Encoded DNS Header " << responseHeader << std::endl;
 
 	// Send DNS Header Size
 	headerSize = htonl(static_cast<uint32_t>(strlen(responseHeader.c_str())));
