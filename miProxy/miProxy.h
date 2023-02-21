@@ -25,6 +25,7 @@ struct Connection {
     time_point<chrono::steady_clock> server_conn_start;
     double current_throughput;
     vector<int> available_bitrates; // in kbps
+    string no_list_message;
 };
 
 class MiProxy {

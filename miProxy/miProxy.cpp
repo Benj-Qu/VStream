@@ -142,6 +142,9 @@ void MiProxy::handle_client_connection(Connection &conn) {
     }
 }
 
+const static string VIDEO_NAME = "big_buck_bunny.f4m";
+const static string VIDEO_NAME_NEW = "big_buck_bunny_nolist.f4m";
+
 void MiProxy::handle_request_message(Connection &conn) {
     // forward the message to the server
     if (conn.server_socket == -1) {
@@ -160,6 +163,14 @@ void MiProxy::handle_request_message(Connection &conn) {
         if (connect(conn.server_socket, (sockaddr *)&address, sizeof(address)) < 0) {
             throw runtime_error("connect failed");
         }
+    }
+
+    // check big_buck_bunny.f4m
+    size_t pos = conn.client_message.find(VIDEO_NAME);
+    if (pos != string::npos) {
+        // replace big_buck_bunny.f4m with big_buck_bunny_nolist.f4m
+        conn.no_list_message = string(conn.client_message);
+        conn.no_list_message.replace(pos, VIDEO_NAME.size(), VIDEO_NAME_NEW);
     }
 
     // send the message
@@ -211,7 +222,7 @@ void MiProxy::handle_server_connection(Connection &conn) {
 
     // Request message is complete
     cout << "\n---New message---\n";
-    cout << conn.server_message.substr(0, BUFFER_SIZE * 5) << endl;
+    cout << conn.server_message.substr(0, BUFFER_SIZE) << endl;
     printf("\nReceived from: ip %s , port %d \n",
            inet_ntoa(address.sin_addr), ntohs(address.sin_port));
     handle_response_message(conn);
@@ -219,12 +230,13 @@ void MiProxy::handle_server_connection(Connection &conn) {
 
 void MiProxy::handle_response_message(Connection &conn) {
     // forward the message to the client
-    // send the message
-    cout << "Sending message to client..." << endl;
-    send_all(conn.client_socket, conn.server_message.c_str(), conn.server_message.size());
     // check xml file
-    if (conn.available_bitrates.empty()) {
+    if (!conn.no_list_message.empty()) {
         parse_xml(conn);
+        // send no_list_message to server
+        cout << "Sending message to server..." << endl;
+        send_all(conn.server_socket, conn.no_list_message.c_str(), conn.no_list_message.size());
+        conn.no_list_message.clear();
     } else {
         // calculate throughput
         duration<double> time_diff = steady_clock::now() - conn.server_conn_start;
@@ -233,8 +245,10 @@ void MiProxy::handle_response_message(Connection &conn) {
         cout << "Time diff: " << time_diff.count() << " s" << endl;
         cout << "New throughput: " << new_throughput << " kbps" << endl;
         cout << "Current throughput: " << conn.current_throughput << " kbps" << endl;
+        // send the message
+        cout << "Sending message to client..." << endl;
+        send_all(conn.client_socket, conn.server_message.c_str(), conn.server_message.size());
     }
-
     conn.server_message.clear();
     conn.server_message_len = 0;
 }
@@ -242,16 +256,16 @@ void MiProxy::handle_response_message(Connection &conn) {
 void MiProxy::parse_xml(Connection &conn) {
     // check content type
     if (conn.server_message.find("Content-Type: text/xml") == string::npos) {
-        cout << "---Not a text xml---" << endl;
-        return;
+        throw runtime_error("Content-Type is not text/xml");
     }
     cout << "---Parsing xml---" << endl;
     size_t br_pos, br_end_pos;
-    while ((br_pos = conn.server_message.find("bitrate=\"")) != string::npos) {
-        br_end_pos = conn.server_message.find("\"", br_pos + 9);
-        string br_str = conn.server_message.substr(br_pos + 9, br_end_pos - br_pos - 9);
+    string &msg =conn.server_message;
+    while ((br_pos = msg.find("bitrate=\"")) != string::npos) {
+        br_end_pos = msg.find("\"", br_pos + 9);
+        string br_str = msg.substr(br_pos + 9, br_end_pos - br_pos - 9);
         conn.available_bitrates.push_back(stoi(br_str));
-        conn.server_message.erase(br_pos, br_end_pos - br_pos + 1);
+        msg.erase(br_pos, br_end_pos - br_pos + 1);
         cout << "Available bitrate: " << br_str << endl;
     }
     sort(conn.available_bitrates.begin(), conn.available_bitrates.end());
