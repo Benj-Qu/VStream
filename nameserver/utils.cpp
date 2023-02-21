@@ -44,7 +44,7 @@ Info::Info(int argc, char** argv) {
 }
 
 void Info::usage() {
-    std::cerr << "./nameserver [--geo|--rr] <port> <servers> <log>" << std::endl;
+    std::cerr << "Usage: ./nameserver [--geo|--rr] <port> <servers> <log>" << std::endl;
     exit(1);
 }
 
