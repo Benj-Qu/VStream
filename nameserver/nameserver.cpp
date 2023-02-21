@@ -118,6 +118,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	recv(connectionfd, &headerSize, sizeof(headerSize), 0);
 	headerSize = ntohl(headerSize);
 
+	std::cout << "Successfully Received DNS Header Size " << headerSize << std::endl;
+
 	// Receive DNS Header
 	DNSHeader header = DNSHeader::decode(receive_all(connectionfd, headerSize));
 
@@ -128,6 +130,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	int questionSize;
 	recv(connectionfd, &questionSize, sizeof(questionSize), 0);
 	questionSize = ntohl(questionSize);
+
+	std::cout << "Successfully Received DNS Question Size " << questionSize << std::endl;
 
 	// Receive DNS Question
 	DNSQuestion question = DNSQuestion::decode(receive_all(connectionfd, questionSize));
@@ -149,7 +153,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	string responseHeader = DNSHeader::encode(header);
 
 	// Send DNS Header Size
-	headerSize = htonl(sizeof(responseHeader));
+	headerSize = htonl(sizeof(responseHeader.c_str()));
 	send(connectionfd, static_cast<void*>(&headerSize), sizeof(headerSize), 0);
 
 	// Send DNS Header
@@ -169,7 +173,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	string responseRecord = DNSRecord::encode(record);
 
 	// Send DNS Record Size
-	int recordSize = htonl(sizeof(responseRecord));
+	int recordSize = htonl(sizeof(responseRecord.c_str()));
 	send(connectionfd, static_cast<void*>(&recordSize), sizeof(recordSize), 0);
 
 	// Send DNS Record
