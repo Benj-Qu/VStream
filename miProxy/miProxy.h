@@ -55,6 +55,8 @@ class MiProxy {
     void handle_response_message(Connection &conn);
     int parse_header(Connection &conn);
     void parse_xml(Connection &conn);
+    void parse_bitrate(Connection &conn);
+    void update_throughput(Connection &conn);
 };
 
 #endif

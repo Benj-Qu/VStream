@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
-#include <string>
+#include <regex>
 
 #include "helpers.h"
 
@@ -155,7 +155,7 @@ void MiProxy::handle_request_message(Connection &conn) {
         }
 
         struct sockaddr_in address;
-        if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) { //TODO
+        if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {  // TODO
             throw runtime_error("make_client_sockaddr failed");
         }
 
@@ -173,16 +173,46 @@ void MiProxy::handle_request_message(Connection &conn) {
         conn.no_list_message.replace(pos, VIDEO_NAME.size(), VIDEO_NAME_NEW);
     }
 
+    // parse bitrate
+    parse_bitrate(conn);
+
     // send the message
     cout << "Sending message to server..." << endl;
     send_all(conn.server_socket, conn.client_message.c_str(), conn.client_message.size());
     conn.client_message.clear();
 }
 
+void MiProxy::parse_bitrate(Connection &conn) {
+    // validate path
+    // GET /vod/1000Seg1-Frag2 HTTP/1.1
+    string &msg = conn.client_message;
+    string front_msg = msg.substr(0, msg.find(" HTTP/1.1"));  // GET /vod/1000Seg1-Frag2
+    size_t path_start_pos = front_msg.rfind("/");
+    size_t pos_s = front_msg.rfind("Seg");
+    size_t pos_f = front_msg.rfind("-Frag");
+    if (pos_s == string::npos || pos_f == string::npos || pos_f - pos_s < 4 || pos_s - path_start_pos < 2) {
+        return;
+    }
+    double bitrate_max = conn.current_throughput / 1.5;
+    cout << "Max bitrate allowed: " << bitrate_max << "kbps" << endl;
+    int best_bitrate = conn.available_bitrates[0];
+    for (auto br : conn.available_bitrates) {
+        if (br <= bitrate_max) {
+            best_bitrate = br;
+        } else {
+            break;
+        }
+    }
+    cout << "Current bitrate: " << best_bitrate << "kbps" << endl;
+    conn.client_message = msg.substr(0, path_start_pos + 1) + to_string(best_bitrate) + msg.substr(pos_s);
+    cout << "\n---Modified message---\n";
+    cout << conn.client_message << endl;
+}
+
 void MiProxy::handle_server_connection(Connection &conn) {
     cout << "\n---Handling server connection at socket " << conn.server_socket << "---" << endl;
 
-    if (conn.server_message.empty()){
+    if (conn.server_message.empty()) {
         // new message from server
         conn.server_conn_start = steady_clock::now();
     }
@@ -211,7 +241,7 @@ void MiProxy::handle_server_connection(Connection &conn) {
     conn.server_message.append(buffer, valread);
 
     if (conn.server_message_len == 0 && parse_header(conn) == -1) {
-        return; // header not complete
+        return;  // header not complete
     }
 
     if (conn.server_message.size() < conn.server_message_len) {
@@ -238,19 +268,31 @@ void MiProxy::handle_response_message(Connection &conn) {
         send_all(conn.server_socket, conn.no_list_message.c_str(), conn.no_list_message.size());
         conn.no_list_message.clear();
     } else {
-        // calculate throughput
-        duration<double> time_diff = steady_clock::now() - conn.server_conn_start;
-        double new_throughput = (double)conn.server_message_len / time_diff.count() * 8 / 1000; // kbps
-        conn.current_throughput = alpha * new_throughput + (1 - alpha) * conn.current_throughput;
-        cout << "Time diff: " << time_diff.count() << " s" << endl;
-        cout << "New throughput: " << new_throughput << " kbps" << endl;
-        cout << "Current throughput: " << conn.current_throughput << " kbps" << endl;
+        update_throughput(conn);
         // send the message
         cout << "Sending message to client..." << endl;
         send_all(conn.client_socket, conn.server_message.c_str(), conn.server_message.size());
     }
     conn.server_message.clear();
     conn.server_message_len = 0;
+}
+
+void MiProxy::update_throughput(Connection &conn) {
+    // check content type
+    size_t ct_pos = conn.server_message.find("Content-Type: video/f4f");
+    size_t crlf_pos = conn.server_message.find("\r\n\r\n");
+    if (ct_pos == string::npos || crlf_pos == string::npos || ct_pos > crlf_pos) {
+        return;
+    }
+
+    // calculate throughput
+    duration<double> time_diff = steady_clock::now() - conn.server_conn_start;
+    double new_throughput = (double)conn.server_message_len / time_diff.count() * 8 / 1000;  // kbps
+    cout << "Previous throughput: " << conn.current_throughput << " kbps" << endl;
+    conn.current_throughput = alpha * new_throughput + (1 - alpha) * conn.current_throughput;
+    cout << "Time diff: " << time_diff.count() << " s" << endl;
+    cout << "New throughput: " << new_throughput << " kbps" << endl;
+    cout << "Current throughput: " << conn.current_throughput << " kbps" << endl;
 }
 
 void MiProxy::parse_xml(Connection &conn) {
@@ -260,7 +302,7 @@ void MiProxy::parse_xml(Connection &conn) {
     }
     cout << "---Parsing xml---" << endl;
     size_t br_pos, br_end_pos;
-    string &msg =conn.server_message;
+    string &msg = conn.server_message;
     while ((br_pos = msg.find("bitrate=\"")) != string::npos) {
         br_end_pos = msg.find("\"", br_pos + 9);
         string br_str = msg.substr(br_pos + 9, br_end_pos - br_pos - 9);
