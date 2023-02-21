@@ -99,6 +99,7 @@ int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size) {
 			exit(1);
 		}
 		string ip = inet_ntoa(client_addr.sin_addr);
+		std::cout << "Server connected to client " << ip << "..." << std::endl;
 
 		handle_connection(connectionfd, log, info, rr, geo, ip);
 	}
@@ -109,7 +110,7 @@ int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size) {
  */
 void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* rr, Geography* geo, string clientIP) {
 	printf("New connection %d\n", connectionfd);
-	
+
 	// Receive DNS Header Size
 	int headerSize;
 	recv(connectionfd, &headerSize, sizeof(headerSize), 0);
