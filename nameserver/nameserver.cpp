@@ -78,7 +78,7 @@ int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size) {
 
 	// Detect which port was chosen.
 	int port = get_port_number(sockfd);
-	printf("Server listening on port %d...\n", port);
+	std::cout << "Server listening on port " << port << "..." << std::endl;
 
 	// Begin listening for incoming connections.
 	listen(sockfd, queue_size);
@@ -111,7 +111,7 @@ int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size) {
  * Receives DNS Header and DNS Question, and Answers DNS Header and DNS Record.
  */
 void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* rr, Geography* geo, string clientIP) {
-	printf("New connection %d\n", connectionfd);
+	std::cout << "New connection " << connectionfd << std::endl;
 
 	// Receive DNS Header Size
 	int headerSize;
@@ -121,7 +121,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Receive DNS Header
 	DNSHeader header = DNSHeader::decode(receive_all(connectionfd, headerSize));
 
-	printf("Successfully Received DNS Header\n");
+	std::cout << "Successfully Received DNS Header" << std::endl;
 
 	// Receive DNS Question Size
 	int questionSize;
@@ -132,7 +132,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	DNSQuestion question = DNSQuestion::decode(receive_all(connectionfd, questionSize));
 	string domain = question.QNAME;
 
-	printf("Successfully Received DNS Question\n");
+	std::cout << "Successfully Received DNS Question" << std::endl;
 
 	// TODO: Check QNAME is video.cse.umich.edu
 
@@ -153,7 +153,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Send DNS Header
 	send_all(connectionfd, responseHeader.c_str());
 
-	printf("Successfully Sent DNS Header\n");
+	std::cout << "Successfully Sent DNS Header" << std::endl;
+	std::cout << sizeof(responseHeader) << std::endl << responseHeader << std::endl;
 
 	// Edit DNS Record
 	DNSRecord record;
@@ -172,7 +173,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Send DNS Record
 	send_all(connectionfd, responseRecord.c_str());
 
-	printf("Successfully Sent DNS Record\n");
+	std::cout << "Successfully Sent DNS Record" << std::endl;
+	std::cout << sizeof(responseRecord) << std::endl << responseRecord << std::endl;
 
 	// Close connection
     close(connectionfd);
