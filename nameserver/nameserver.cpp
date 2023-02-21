@@ -151,12 +151,15 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Send DNS Header Size
 	headerSize = htonl(static_cast<uint32_t>(strlen(responseHeader.c_str())));
-	send(connectionfd, static_cast<void*>(&headerSize), sizeof(headerSize), 0);
+	if (send(connectionfd, static_cast<void*>(&headerSize), sizeof(headerSize), 0) != sizeof(headerSize)) {
+		perror("Error sending on stream socket");
+		exit(1);
+	}
 
 	std::cout << "Successfully Sent DNS Header Size " << ntohl(headerSize) << std::endl;
 
 	// Send DNS Header
-	send_all(connectionfd, responseHeader.c_str(), ntohl(headerSize));
+	send_all(connectionfd, responseHeader.c_str(), static_cast<int>(strlen(responseHeader.c_str())));
 
 	std::cout << "Successfully Sent DNS Header" << std::endl;
 
@@ -170,16 +173,19 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	record.RDLENGTH = static_cast<ushort>(ip.length());
 	string responseRecord = DNSRecord::encode(record);
 
-	std::cout << "Successfully Encoded DNS Record" << std::endl;
+	std::cout << "Successfully Encoded DNS Record " << responseRecord << std::endl;
 
 	// Send DNS Record Size
 	int recordSize = htonl(static_cast<uint32_t>(strlen(responseRecord.c_str())));
-	send(connectionfd, static_cast<void*>(&recordSize), sizeof(recordSize), 0);
+	if (send(connectionfd, static_cast<void*>(&recordSize), sizeof(recordSize), 0) != sizeof(recordSize)) {
+		perror("Error sending on stream socket");
+		exit(1);
+	}
 
 	std::cout << "Successfully Sent DNS Record Size " << ntohl(recordSize) << std::endl;
 
 	// Send DNS Record
-	send_all(connectionfd, responseRecord.c_str(), ntohl(recordSize));
+	send_all(connectionfd, responseRecord.c_str(), static_cast<int>(strlen(responseRecord.c_str())));
 
 	std::cout << "Successfully Sent DNS Record" << std::endl;
 
@@ -205,8 +211,8 @@ void send_all(int connectionfd, const char *message, int size) {
 			perror("Error sending on stream socket");
 			exit(1);
 		}
-		sent += sval;
 		std::cout << sval << " bytes sent" << std::endl;
+		sent += sval;
 	} while (sent < static_cast<size_t>(size));
 }
 
