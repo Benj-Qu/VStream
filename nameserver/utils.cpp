@@ -174,6 +174,7 @@ string Geography::findServer(string client) {
     Neighbor current(this->IPmap[client], 0);
     map<Node*, int> distMap = {{this->IPmap[client], 0}};
     unordered_set<Node*> visited;
+    std::cout << "Start from " << client << std::endl;
     // Traverse All Nodes
     while (!distMap.empty()) {
         // Return Current Node if Server
@@ -187,6 +188,7 @@ string Geography::findServer(string client) {
             return current.getNptr()->getIp();
         }
         // Mark Current Node Visited
+        std::cout << "Traverse to " << current.getNptr()->getIp() << "with distance " << current.getDistance() << std::endl;
         visited.insert(current.getNptr());
         // Remove Current Node from DistMap
         distMap.erase(current.getNptr());

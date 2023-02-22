@@ -155,7 +155,6 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 		headerSize = htonl(static_cast<uint32_t>(responseHeader.length()));
 		if (send(connectionfd, &headerSize, sizeof(headerSize), 0) == -1) {
 			perror("Error sending on stream socket");
-			exit(1);
 		}
 		// Send DNS Header
 		send_all(connectionfd, responseHeader.c_str(), responseHeader.length());
@@ -178,7 +177,6 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 		headerSize = htonl(static_cast<uint32_t>(responseHeader.length()));
 		if (send(connectionfd, &headerSize, sizeof(headerSize), 0) == -1) {
 			perror("Error sending on stream socket");
-			exit(1);
 		}
 		// Send DNS Header
 		send_all(connectionfd, responseHeader.c_str(), responseHeader.length());
