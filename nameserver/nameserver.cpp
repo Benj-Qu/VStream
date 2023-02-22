@@ -162,6 +162,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 		close(connectionfd);
 
 		std::cout << "Only supports video.cse.umich.edu" << std::endl;
+		return;
 	}
 
 	// Find the Response IP
@@ -184,6 +185,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 		close(connectionfd);
 
 		std::cout << "Cannot find ip for client " << clientIP << std::endl;
+		return;
 	}
 
 	std::cout << clientIP << " " << domain << " " << ip << std::endl;
