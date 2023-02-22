@@ -152,6 +152,23 @@ Geography::Geography(string filename) {
     }
     // Close file
     file.close();
+
+    std::cout << "IP Info:\n";
+    for (auto pair : this->IPmap) {
+        std::cout << pair.first << " " << pair.second->getType() << " " << pair.second->getIp() << std::endl;
+    }
+    std::cout << "Nodes Info:\n";
+    for (auto pair : this->nodes) {
+        std::cout << pair.first << " " << pair.second->getType() << " " << pair.second->getIp() << std::endl;
+    }
+    std::cout << "Edges Info:\n";
+    for (auto pair : this->edges) {
+        std::cout << pair.first->getIp() << ":\n";
+        for (Neighbor neighbor : pair.second) {
+            std::cout << neighbor.getNptr()->getIp() << " " << neighbor.getDistance() << "; ";
+        }
+        std::cout << std::endl;
+    }
 }
 
 Geography::~Geography() {
