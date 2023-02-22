@@ -12,7 +12,7 @@ static const int MAX_MESSAGE_SIZE = 256;
 int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size = 10);
 void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* rr, Geography* geo, string clientIP);
 void send_all(int connectionfd, const char *message, size_t size);
-string receive_all(int connectionfd, int size);
+string receive_all(int connectionfd, uint32_t size);
 void make_server_sockaddr(struct sockaddr_in *addr, int port);
 int get_port_number(int sockfd);
 
@@ -115,7 +115,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	std::cout << "New connection " << connectionfd << std::endl;
 
 	// Receive DNS Header Size
-	int headerSize;
+	uint32_t headerSize;
 	if (recv(connectionfd, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
 		std::cerr << "Error reading stream message" << std::endl;
 		exit(1);
@@ -129,7 +129,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	std::cout << DNSHeader::encode(header) << std::endl;
 
 	// Receive DNS Question Size
-	int questionSize;
+	uint32_t questionSize;
 	if (recv(connectionfd, &questionSize, sizeof(questionSize), 0) != sizeof(questionSize)) {
 		std::cerr << "Error reading stream message" << std::endl;
 		exit(1);
@@ -158,7 +158,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Send DNS Header Size
 	headerSize = htonl(static_cast<uint32_t>(responseHeader.length()));
-	if (send(connectionfd, static_cast<void*>(&headerSize), sizeof(headerSize), 0) != sizeof(headerSize)) {
+	if (send(connectionfd, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
 		perror("Error sending on stream socket");
 		exit(1);
 	}
@@ -184,7 +184,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Send DNS Record Size
 	int recordSize = htonl(static_cast<uint32_t>(responseRecord.length()));
-	if (send(connectionfd, static_cast<void*>(&recordSize), sizeof(recordSize), 0) != sizeof(recordSize)) {
+	if (send(connectionfd, &recordSize, sizeof(recordSize), 0) != sizeof(recordSize)) {
 		perror("Error sending on stream socket");
 		exit(1);
 	}
@@ -226,7 +226,7 @@ void send_all(int connectionfd, const char *message, size_t size) {
 /**
  * Receives a string message from the client with given size.
  */
-string receive_all(int connectionfd, int size) {
+string receive_all(int connectionfd, uint32_t size) {
 	// Initialize message with given size.
 	char msg[MAX_MESSAGE_SIZE + 1];
 	memset(msg, 0, sizeof(msg));
@@ -245,7 +245,7 @@ string receive_all(int connectionfd, int size) {
 		recvd += rval;
 	} while (rval > 0);  // recv() returns 0 when client closes
 
-	return msg;
+	return string(msg, size);
 }
 
 /**
