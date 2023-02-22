@@ -15,7 +15,6 @@ void send_all(int connectionfd, const char *message, size_t size);
 string receive_all(int connectionfd, int size);
 void make_server_sockaddr(struct sockaddr_in *addr, int port);
 int get_port_number(int sockfd);
-void update_header(DNSHeader* header);
 
 int main(int argc, char **argv) {
     // Read Arguments
@@ -152,7 +151,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	std::cout << clientIP << " " << domain << " " << ip << std::endl;
 
 	// Edit DNS Header
-	update_header(&header);
+	header.AA = 1;
 	string responseHeader = DNSHeader::encode(header);
 
 	std::cout << "Successfully Encoded DNS Header " << responseHeader << std::endl;
@@ -275,13 +274,4 @@ void make_server_sockaddr(struct sockaddr_in *addr, int port) {
 
 	// Set the port value.
 	addr->sin_port = htons(static_cast<uint16_t>(port));
-}
-
-void update_header(DNSHeader* header) {
-	header->AA = 1;
-	header->RD = 0;
-	header->RA = 0;
-	header->Z = 0;
-	header->NSCOUNT = 0;
-	header->ARCOUNT = 0;
 }
