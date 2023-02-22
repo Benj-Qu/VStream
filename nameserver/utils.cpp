@@ -110,6 +110,7 @@ Geography::Geography(string filename) {
     // Read Node Number
     int NodeNum = 0;
     file >> s >> NodeNum;
+    std::cout << "Record " << NodeNum << " Nodes" << std::endl;
     // Read Nodes
     for (int i = 0; i < NodeNum; i++) {
         int id = 0;
@@ -129,6 +130,7 @@ Geography::Geography(string filename) {
     // Read Edge Number
     int EdgeNum = 0;
     file >> s >> EdgeNum;
+    std::cout << "Record " << EdgeNum << " Edges" << std::endl;
     // Read Edges
     for (int i = 0; i < EdgeNum; i++) {
         int id1, id2, dist;
