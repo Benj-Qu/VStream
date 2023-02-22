@@ -116,6 +116,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Receive DNS Header Size
 	uint32_t headerSize;
+	memset(&headerSize, 0, sizeof(headerSize));
 	if (recv(connectionfd, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
 		std::cerr << "Error reading stream message" << std::endl;
 		exit(1);
@@ -130,6 +131,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Receive DNS Question Size
 	uint32_t questionSize;
+	memset(&questionSize, 0, sizeof(questionSize));
 	if (recv(connectionfd, &questionSize, sizeof(questionSize), 0) != sizeof(questionSize)) {
 		std::cerr << "Error reading stream message" << std::endl;
 		exit(1);
@@ -230,19 +232,26 @@ string receive_all(int connectionfd, uint32_t size) {
 	char msg[MAX_MESSAGE_SIZE + 1];
 	memset(msg, 0, sizeof(msg));
 
-	// Call recv() enough times to consume all the data the client sends.
-	size_t recvd = 0;
-	ssize_t rval;
-	do {
-		// Receive as many additional bytes as we can in one call to recv()
-		// (while not exceeding MAX_MESSAGE_SIZE bytes in total).
-		rval = recv(connectionfd, msg + recvd, size - recvd, 0);
-		if (rval == -1) {
-			std::cerr << "Error reading stream message" << std::endl;
-			exit(1);
-		}
-		recvd += rval;
-	} while (rval > 0);  // recv() returns 0 when client closes
+	if (recv(connectionfd, msg, size, 0) == -1) {
+		std::cerr << "Error reading stream message" << std::endl;
+		exit(1);
+	}
+	msg[size+1] = '\0';
+
+	// // Call recv() enough times to consume all the data the client sends.
+	// size_t recvd = 0;
+	// ssize_t rval;
+
+	// do {
+	// 	// Receive as many additional bytes as we can in one call to recv()
+	// 	// (while not exceeding MAX_MESSAGE_SIZE bytes in total).
+	// 	rval = recv(connectionfd, msg + recvd, size - recvd, 0);
+	// 	if (rval == -1) {
+	// 		std::cerr << "Error reading stream message" << std::endl;
+	// 		exit(1);
+	// 	}
+	// 	recvd += rval;
+	// } while ((rval > 0) && (recvd <= size));  // recv() returns 0 when client closes
 
 	return string(msg, size);
 }
