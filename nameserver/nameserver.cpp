@@ -156,6 +156,18 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	std::cout << "Successfully Encoded DNS Header " << responseHeader << std::endl;
 
+	// Edit DNS Record
+	DNSRecord record;
+	record.TYPE = 1;
+	record.CLASS = 1;
+	record.TTL = 0;
+	strcpy(record.NAME, domain.c_str());
+	strcpy(record.RDATA, ip.c_str());
+	record.RDLENGTH = static_cast<ushort>(ip.length());
+	string responseRecord = DNSRecord::encode(record);
+
+	std::cout << "Successfully Encoded DNS Record " << responseRecord << std::endl;
+
 	// Send DNS Header Size
 	headerSize = htonl(static_cast<uint32_t>(responseHeader.length()));
 	if (send(connectionfd, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
@@ -170,20 +182,8 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	std::cout << "Successfully Sent DNS Header" << std::endl;
 
-	// Edit DNS Record
-	DNSRecord record;
-	record.TYPE = 1;
-	record.CLASS = 1;
-	record.TTL = 0;
-	strcpy(record.NAME, domain.c_str());
-	strcpy(record.RDATA, ip.c_str());
-	record.RDLENGTH = static_cast<ushort>(ip.length());
-	string responseRecord = DNSRecord::encode(record);
-
-	std::cout << "Successfully Encoded DNS Record " << responseRecord << std::endl;
-
 	// Send DNS Record Size
-	int recordSize = htonl(static_cast<uint32_t>(responseRecord.length()));
+	uint32_t recordSize = htonl(static_cast<uint32_t>(responseRecord.length()));
 	if (send(connectionfd, &recordSize, sizeof(recordSize), 0) != sizeof(recordSize)) {
 		perror("Error sending on stream socket");
 		exit(1);
@@ -212,13 +212,12 @@ void send_all(int connectionfd, const char *message, size_t size) {
 	std::cout << "Sending " << size << " bytes" << std::endl;
 	size_t sent = 0;
 	do {
-		std::cout << size - sent << " bytes remaining" << std::endl;
 		ssize_t sval = send(connectionfd, message + sent, size - sent, 0);
 		if (sval == -1) {
 			perror("Error sending on stream socket");
 			exit(1);
 		}
-		std::cout << sval << " bytes sent" << std::endl;
+		std::cout << sval << " bytes sent " << size - sent << " bytes remaining" << std::endl;
 		sent += sval;
 	} while (sent < size);
 }
