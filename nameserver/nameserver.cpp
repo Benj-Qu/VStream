@@ -132,7 +132,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	// Receive DNS Question Size
 	uint32_t questionSize;
 	memset(&questionSize, 0, sizeof(questionSize));
-	if (recv(connectionfd, &questionSize, sizeof(questionSize), 0) != sizeof(questionSize)) {
+	if (recv(connectionfd, &questionSize, sizeof(questionSize), 0) == -1) {
 		std::cerr << "Error reading stream message" << std::endl;
 		exit(1);
 	}
@@ -146,9 +146,47 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 	std::cout << DNSQuestion::encode(question) << std::endl;
 
 	// Check QNAME is video.cse.umich.edu
+	if (domain != "video.cse.umich.edu") {
+		// Edit DNS Header
+		header.AA = 1;
+		header.RCODE = 3;
+		string responseHeader = DNSHeader::encode(header);
+		// Send DNS Header Size
+		headerSize = htonl(static_cast<uint32_t>(responseHeader.length()));
+		if (send(connectionfd, &headerSize, sizeof(headerSize), 0) == -1) {
+			perror("Error sending on stream socket");
+			exit(1);
+		}
+		// Send DNS Header
+		send_all(connectionfd, responseHeader.c_str(), responseHeader.length());
+		// Close connection
+		close(connectionfd);
+
+		std::cout << "Only supports video.cse.umich.edu" << std::endl;
+	}
 
 	// Find the Response IP
 	string ip = selectServer(info, rr, geo, clientIP);
+
+	// If IP not found
+	if (ip == "") {
+		// Edit DNS Header
+		header.AA = 1;
+		header.RCODE = 3;
+		string responseHeader = DNSHeader::encode(header);
+		// Send DNS Header Size
+		headerSize = htonl(static_cast<uint32_t>(responseHeader.length()));
+		if (send(connectionfd, &headerSize, sizeof(headerSize), 0) == -1) {
+			perror("Error sending on stream socket");
+			exit(1);
+		}
+		// Send DNS Header
+		send_all(connectionfd, responseHeader.c_str(), responseHeader.length());
+		// Close connection
+		close(connectionfd);
+
+		std::cout << "Cannot find ip for client " << clientIP << std::endl;
+	}
 
 	std::cout << clientIP << " " << domain << " " << ip << std::endl;
 
@@ -172,7 +210,7 @@ void handle_connection(int connectionfd, ofstream& log, Info* info, RoundRobin* 
 
 	// Send DNS Header Size
 	headerSize = htonl(static_cast<uint32_t>(responseHeader.length()));
-	if (send(connectionfd, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
+	if (send(connectionfd, &headerSize, sizeof(headerSize), 0) == -1) {
 		perror("Error sending on stream socket");
 		exit(1);
 	}

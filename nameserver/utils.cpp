@@ -162,9 +162,9 @@ Geography::~Geography() {
 
 string Geography::findServer(string client) {
     // Check Client in network
-    if (this->IPmap.find(client) == this->IPmap.end()) {
+    if ((this->IPmap.find(client) == this->IPmap.end()) || ((this->IPmap[client])->getType() != NodeType::CLIENT)) {
         std::cerr << "Fail to Find Client with IP " << client << std::endl;
-        exit(1);
+        return "";
     }
     // Check Cache for client
     if (this->cache.find(client) != this->cache.end()) {
@@ -210,5 +210,5 @@ string Geography::findServer(string client) {
     }
     // No Connected Server Found
     std::cerr << "Fail to Find Connected Server from Client with IP " << client << std::endl;
-    exit(1);
+    return "";
 }
