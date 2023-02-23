@@ -14,7 +14,6 @@
 #include <map>
 #include <vector>
 
-#include "helpers.h"
 #include "DNSHeader.h"
 #include "DNSQuestion.h"
 #include "DNSRecord.h"

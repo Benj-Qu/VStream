@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <regex>
 
-
+#include "helpers.h"
 void MiProxy::get_options(int argc, char *argv[]) {
     vector<string> args(argv, argv + argc);
     if (argc == 6 && args[1] == "--nodns") {
