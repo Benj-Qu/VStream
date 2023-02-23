@@ -14,6 +14,11 @@
 #include <map>
 #include <vector>
 
+#include "helpers.h"
+#include "DNSHeader.h"
+#include "DNSQuestion.h"
+#include "DNSRecord.h"
+
 using namespace std;
 using namespace std::chrono;
 
@@ -53,6 +58,7 @@ class MiProxy {
     map<string, Connection> clients;  // <client_ip, Connection>
     int master_socket;
     ofstream log;
+    int dns_socket;
 
     void init_master_socket();
     void handle_master_connection();
@@ -64,6 +70,16 @@ class MiProxy {
     void parse_xml(Connection &conn);
     void parse_bitrate(Connection &conn);
     void update_throughput(Connection &conn);
+    
+    void init_dns_socket();
+    void handle_dns_request(Connection &conn);
+    void handle_dns_response(Connection &conn);
+    string make_DNSHeader();
+    string make_DNSQuestion();
+
+    string receive_all(int connectionfd, uint32_t size);
+
+
 };
 
 #endif

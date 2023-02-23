@@ -11,7 +11,6 @@
 #include <cstdio>
 #include <regex>
 
-#include "helpers.h"
 
 void MiProxy::get_options(int argc, char *argv[]) {
     vector<string> args(argv, argv + argc);
@@ -78,6 +77,7 @@ void MiProxy::init_master_socket() {
 void MiProxy::init() {
     init_master_socket();
     log.open(log_path);
+    if (dns_mode) init_dns_socket();
     puts("Waiting for connections ...");
 }
 
@@ -154,6 +154,12 @@ void MiProxy::handle_request_message(Connection &conn) {
             throw runtime_error("socket failed");
         }
 
+        // resolve ip if dns
+        if (dns_mode){
+            handle_dns_request(conn);
+            handle_dns_response(conn);
+        }
+
         struct sockaddr_in address;
         if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {  // TODO
             throw runtime_error("make_client_sockaddr failed");
@@ -180,6 +186,101 @@ void MiProxy::handle_request_message(Connection &conn) {
     cout << "Sending message to server..." << endl;
     send_all(conn.server_socket, conn.client_message.c_str(), conn.client_message.size());
     conn.client_message.clear();
+}
+
+const static string DOMAIN_NAME = "video.cse.umich.edu"; // DNS server resolve
+
+void MiProxy::init_dns_socket()
+{
+    dns_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (dns_socket < 0) {
+        throw runtime_error("socket failed");
+    }
+
+    struct sockaddr_in address;
+    if (make_client_sockaddr(&address, dns_ip.c_str(), dns_port) == -1) {
+        throw runtime_error("make_client_sockaddr failed");
+    }
+
+    cout << "Connecting to dns server..." << endl;
+    if (connect(dns_socket, (sockaddr *)&address, sizeof(address)) < 0) {
+        throw runtime_error("connect dns failed");
+    }
+}
+void MiProxy::handle_dns_request(Connection &conn)
+{
+    // DNS Header
+    string header = make_DNSHeader();
+    string question = make_DNSQuestion();
+
+    cout << "Sending header size to dns server..." << endl;
+    uint32_t header_size = htonl(static_cast<uint32_t>(header.length()));
+    send(dns_socket, &header_size, sizeof(header_size), 0);
+
+    cout << "Sending header to dns server..." << endl;
+    send_all(dns_socket, header.c_str(), header.size());
+
+    cout << "Sending question size to dns server..." << endl;
+    uint32_t question_size = htonl(static_cast<uint32_t>(question.length()));
+    send(dns_socket, &question_size, sizeof(question_size), 0);
+
+    cout << "Sending question to dns server..." << endl;
+    send_all(dns_socket, question.c_str(), question.size());
+}
+
+void MiProxy::handle_dns_response(Connection &conn)
+{
+    struct sockaddr_in address;
+    int addrlen = sizeof(address);
+    getpeername(conn.client_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+
+    uint32_t headerSize;
+	memset(&headerSize, 0, sizeof(headerSize));
+	if (recv(dns_socket, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
+		std::cerr << "Error reading dns message" << std::endl;
+		exit(1);
+	}
+	headerSize = ntohl(headerSize);
+
+    // Receive DNS Header
+	DNSHeader header = DNSHeader::decode(receive_all(dns_socket, headerSize));
+
+    if(header.AA != 1) {
+        return;
+    }
+
+    uint32_t recordSize;
+	memset(&recordSize, 0, sizeof(recordSize));
+	if (recv(dns_socket, &recordSize, sizeof(recordSize), 0) != sizeof(recordSize)) {
+		std::cerr << "Error reading dns message" << std::endl;
+		exit(1);
+	}
+	recordSize = ntohl(recordSize);
+
+    DNSRecord record = DNSRecord::decode(receive_all(dns_socket, recordSize));
+    www_ip = record.RDATA;
+
+}
+
+string MiProxy::make_DNSHeader()
+{
+    DNSHeader header;
+    header.AA = 1;
+    header.RD = 0;
+    header.RA = 0;
+    header.Z = 0;
+    header.NSCOUNT = 0;
+    header.ARCOUNT = 0;
+    return header.encode(header);
+}
+
+string MiProxy::make_DNSQuestion()
+{
+    DNSQuestion question;
+    strcpy(question.QNAME, DOMAIN_NAME.c_str());
+    question.QTYPE = 1;
+    question.QCLASS = 1;
+    return question.encode(question);
 }
 
 void MiProxy::parse_bitrate(Connection &conn) {
@@ -384,4 +485,35 @@ void MiProxy::run() {
             }
         }
     }
+}
+
+static const int MAX_MESSAGE_SIZE = 256;
+
+string MiProxy::receive_all(int connectionfd, uint32_t size) {
+	// Initialize message with given size.
+	char msg[MAX_MESSAGE_SIZE + 1];
+	memset(msg, 0, sizeof(msg));
+
+	if (recv(connectionfd, msg, size, 0) == -1) {
+		std::cerr << "Error reading stream message" << std::endl;
+		exit(1);
+	}
+	msg[size+1] = '\0';
+
+	// // Call recv() enough times to consume all the data the client sends.
+	// size_t recvd = 0;
+	// ssize_t rval;
+
+	// do {
+	// 	// Receive as many additional bytes as we can in one call to recv()
+	// 	// (while not exceeding MAX_MESSAGE_SIZE bytes in total).
+	// 	rval = recv(connectionfd, msg + recvd, size - recvd, 0);
+	// 	if (rval == -1) {
+	// 		std::cerr << "Error reading stream message" << std::endl;
+	// 		exit(1);
+	// 	}
+	// 	recvd += rval;
+	// } while ((rval > 0) && (recvd <= size));  // recv() returns 0 when client closes
+
+	return string(msg, size);
 }
