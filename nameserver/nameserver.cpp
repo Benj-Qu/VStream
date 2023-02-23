@@ -51,6 +51,8 @@ int run_server(Info* info, RoundRobin* rr, Geography* geo, int queue_size) {
         std::cerr << "Fail to Open Logfile " << info->getLog() << std::endl;
     }
 
+	std::cout << "Successfully opened " << info->getLog() << std::endl;
+
 	// Create socket
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) {

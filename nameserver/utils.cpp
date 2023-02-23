@@ -79,9 +79,11 @@ string RoundRobin::next() {
 
 // Geography
 
-Node::Node(string _type, string _ip) {
+Node::Node(int _id, string _type, string _ip) {
+    // Set Id
+    this->id = _id;
     // Set Ip
-    this->ip = _ip;
+    this->ip = IP_UINT(_ip);
     // Check and Set Host Type
     if (_type == "CLIENT") {
         this->type = NodeType::CLIENT;
@@ -98,132 +100,165 @@ Node::Node(string _type, string _ip) {
     }
 }
 
-bool MapComp(const pair<Node*, int>& lhs, const pair<Node*, int>& rhs) {
+uint32_t IP_UINT(string IP) {
+    if (IP == "NO_IP") {
+        return 0;
+    }
+    std::istringstream iss(IP);
+    char s;
+    uint32_t ips[4];
+    memset(ips, 0, 4 * sizeof(uint32_t));
+    iss >> ips[0] >> s >> ips[1] >> s >> ips[2] >> s >> ips[3];
+    return (ips[0] << 24) + (ips[1] << 16) + (ips[2] << 8) + ips[3];
+}
+
+string UINT_IP(uint32_t IP) {
+    std::ostringstream oss;
+    uint32_t ips[4];
+    memset(ips, 0, 4 * sizeof(uint32_t));
+    ips[0] = (IP & 0x000000ff) >> 0;
+    ips[1] = (IP & 0x0000ff00) >> 8;
+    ips[2] = (IP & 0x00ff0000) >> 16;
+    ips[3] = (IP & 0xff000000) >> 24;
+    oss << ips[3] << "." << ips[2] << "." << ips[1] << "." << ips[0];
+    return oss.str();
+}
+
+bool MapComp(const pair<int, int>& lhs, const pair<int, int>& rhs) {
     return (lhs.second < rhs.second);
 }
 
 Geography::Geography(string filename) {
     // Open File
     ifstream file(filename);
+    // Check File Status
+    if (!file.is_open()) {
+        std::cerr << "Fail to Open File: " << filename << std::endl;
+        exit(1);
+    }
     // Junk Container
     string s;
     // Read Node Number
     int NodeNum = 0;
     file >> s >> NodeNum;
-    std::cout << "Record " << NodeNum << " Nodes" << std::endl;
     // Read Nodes
     for (int i = 0; i < NodeNum; i++) {
         int id = 0;
         string type, ip;
         file >> id >> type >> ip;
-        Node* nptr = new Node(type, ip);
         // Check Duplicate Id and Ip
-        if ((this->nodes.find(id) == this->nodes.end()) && (this->IPmap.find(ip) == this->IPmap.end())) {
-            this->nodes[id] = nptr;
-            this->IPmap[ip] = nptr;
+        if ((this->nodes.find(id) == this->nodes.end()) && (this->IPmap.find(IP_UINT(ip)) == this->IPmap.end())) {
+            this->nodes[id] = Node(id, type, ip);
+            if (ip != "NO_IP") {
+                this->IPmap[IP_UINT(ip)] = id;
+            }
         }
         else {
-            std::cerr << "Duplicate Node with id " << id << "or ip " << ip << std::endl;
+            std::cerr << "Duplicate Node with id " << id << " or ip " << ip << std::endl;
             exit(1);
         }
     }
     // Read Edge Number
     int EdgeNum = 0;
     file >> s >> EdgeNum;
-    std::cout << "Record " << EdgeNum << " Edges" << std::endl;
     // Read Edges
     for (int i = 0; i < EdgeNum; i++) {
         int id1, id2, dist;
         file >> id1 >> id2 >> dist;
-        Node* nptr1 = this->nodes[id1];
-        Node* nptr2 = this->nodes[id2];
         // Mark Node 2 as the Neighbor of Node 1
-        if (this->edges.find(nptr1) == this->edges.end()) {
-            this->edges[nptr1] = {Neighbor(nptr2, dist)};
+        if (this->edges.find(id1) == this->edges.end()) {
+            this->edges[id1] = {Neighbor(id2, dist)};
         }
         else {
-            this->edges[nptr1].push_back(Neighbor(nptr2, dist));
+            this->edges[id1].push_back(Neighbor(id2, dist));
         }
         // Mark Node 1 as the Neighbor of Node 2
-        if (this->edges.find(nptr2) == this->edges.end()) {
-            this->edges[nptr2] = {Neighbor(nptr1, dist)};
+        if (this->edges.find(id2) == this->edges.end()) {
+            this->edges[id2] = {Neighbor(id1, dist)};
         }
         else {
-            this->edges[nptr2].push_back(Neighbor(nptr1, dist));
+            this->edges[id2].push_back(Neighbor(id1, dist));
         }
     }
     // Close file
     file.close();
 
-    std::cout << "IP Info:\n";
-    for (auto pair : this->IPmap) {
-        std::cout << pair.first << " " << pair.second->getType() << " " << pair.second->getIp() << std::endl;
-    }
-    std::cout << "Nodes Info:\n";
-    for (auto pair : this->nodes) {
-        std::cout << pair.first << " " << pair.second->getType() << " " << pair.second->getIp() << std::endl;
-    }
-    std::cout << "Edges Info:\n";
-    for (auto pair : this->edges) {
-        std::cout << pair.first->getIp() << ":\n";
-        for (Neighbor neighbor : pair.second) {
-            std::cout << neighbor.getNptr()->getIp() << " " << neighbor.getDistance() << "; ";
-        }
-        std::cout << std::endl;
-    }
+    // std::cout << "IP Info:\n";
+    // for (auto pair : this->IPmap) {
+    //     std::cout << pair.first << " " << pair.second->getId() << " " << pair.second->getIp() << " " << pair.second->getType() << ":\n";
+    // }
+    // std::cout << "Nodes Info:\n";
+    // for (auto pair : this->nodes) {
+    //     std::cout << pair.first << " " << pair.second->getId() << " " << pair.second->getIp() << " " << pair.second->getType() << ":\n";
+    // }
+    // std::cout << "Edges Info:\n";
+    // for (auto pair : this->edges) {
+    //     std::cout << pair.first->getId() << " " << pair.first->getIp() << ":\n";
+    //     for (Neighbor neighbor : pair.second) {
+    //         std::cout << neighbor.getNptr()->getId() << " " << neighbor.getNptr()->getIp() << " " << neighbor.getDistance() << "; ";
+    //     }
+    //     std::cout << std::endl;
+    // }
 }
 
-Geography::~Geography() {
-    for (pair<int, Node*> node : this->nodes) {
-        delete node.second;
+string Geography::findServer(string clientIP) {
+    uint32_t client = IP_UINT(clientIP);
+    std::cout << "Client uint32_t ip is " << client << std::endl;
+    // Check ClientIP in network
+    if (this->IPmap.find(client) == this->IPmap.end()) {
+        std::cerr << "Fail to Find Client with IP " << clientIP << std::endl;
+        return "";
     }
-}
-
-string Geography::findServer(string client) {
-    // Check Client in network
-    if ((this->IPmap.find(client) == this->IPmap.end()) || ((this->IPmap[client])->getType() != NodeType::CLIENT)) {
-        std::cerr << "Fail to Find Client with IP " << client << std::endl;
+    // Check given IP address belongs to Client
+    int origin = this->IPmap[client];
+    if (this->nodes[origin].getType() != NodeType::CLIENT) {
+        std::cerr << "IP " << UINT_IP(client) << " Belongs to NON-CLIENT Host" << std::endl;
+        std::cerr << this->nodes[origin].getId() << " " << this->nodes[origin].getIp() << " " << this->nodes[origin].getType() << std::endl;
         return "";
     }
     // Check Cache for client
     if (this->cache.find(client) != this->cache.end()) {
-        return this->cache[client];
+        std::cout << "Client IP Found in Cache" << std::endl;
+        return UINT_IP(this->cache[client]);
     }
     // Find Nearest Server from Client
-    Neighbor current(this->IPmap[client], 0);
-    map<Node*, int> distMap = {{this->IPmap[client], 0}};
-    unordered_set<Node*> visited;
+    Neighbor current(origin, 0);
+    map<int, int> distMap = {{origin, 0}};
+    unordered_set<int> visited;
     std::cout << "Start from " << client << std::endl;
     // Traverse All Nodes
     while (!distMap.empty()) {
+        int currentID = current.getId();
         // Return Current Node if Server
-        if (current.getNptr()->getType() == NodeType::SERVER) {
+        if (nodes[currentID].getType() == NodeType::SERVER) {
             // Dump Cache if Full
             while (cache.size() >= CACHE_SIZE) {
                 cache.erase(cache.begin());
             }
             // Add Client Server Map to Cache
-            cache[client] = current.getNptr()->getIp();
-            return current.getNptr()->getIp();
+            cache[client] = nodes[currentID].getIp();
+            return UINT_IP(nodes[currentID].getIp());
         }
+        
         // Mark Current Node Visited
-        std::cout << "Traverse to " << current.getNptr()->getIp() << "with distance " << current.getDistance() << std::endl;
-        visited.insert(current.getNptr());
+        std::cout << "Traverse to " << nodes[currentID].getIp() << "with distance " << current.getDistance() << std::endl;
+        visited.insert(currentID);
         // Remove Current Node from DistMap
-        distMap.erase(current.getNptr());
+        distMap.erase(currentID);
         // Record Distance of Unvisited Neighbors of Current Node
-        for (Neighbor neighbor : this->edges[current.getNptr()]) {
+        for (Neighbor neighbor : this->edges[currentID]) {
+            int neighborID = neighbor.getId();
             // Skip Visited Nodes and Clients
-            if ((visited.find(neighbor.getNptr()) != visited.end()) || (neighbor.getNptr()->getType() == NodeType::CLIENT)) {
+            if ((visited.find(neighborID) != visited.end()) || (nodes[neighborID].getType() == NodeType::CLIENT)) {
                 continue;
             }
             // If Neighbor Not Found Yet
-            if (distMap.find(neighbor.getNptr()) == distMap.end()) {
-                distMap[neighbor.getNptr()] = current.getDistance() + neighbor.getDistance();
+            if (distMap.find(neighborID) == distMap.end()) {
+                distMap[neighborID] = current.getDistance() + neighbor.getDistance();
             }
             // If Neighbor Already Found
             else {
-                distMap[neighbor.getNptr()] = min(distMap[neighbor.getNptr()], current.getDistance() + neighbor.getDistance());
+                distMap[neighborID] = min(distMap[neighborID], current.getDistance() + neighbor.getDistance());
             }
         }
         // Iterate to Nearest Neighbor

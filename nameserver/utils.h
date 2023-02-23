@@ -13,6 +13,7 @@
 #include <vector>
 #include <climits>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <algorithm>
 #include <unordered_set>
@@ -73,43 +74,48 @@ enum NodeType {CLIENT, SWITCH, SERVER};
 
 class Node {
 private:
+    int id; 
     NodeType type;
-    string ip;
+    uint32_t ip;
 
 public:
-    Node(string _type, string _ip);
+    Node() : id(0), type(NodeType::CLIENT), ip(0) {};
+    Node(int _id, string _type, string _ip);
+    int getId() { return id;};
     NodeType getType() {return type;};
-    string getIp() {return ip;};
+    uint32_t getIp() {return ip;};
 };
 
 class Neighbor {
 private:
-    Node* nptr;
+    int id;
     int distance;
 
 public:
-    Neighbor(Node* _nptr, int _distance) : nptr(_nptr), distance(_distance) {};
-    Neighbor(pair<Node*, int> _neighbor) : nptr(_neighbor.first), distance(_neighbor.second) {};
-    Node* getNptr() {return nptr;};
+    Neighbor(int _id, int _distance) : id(_id), distance(_distance) {};
+    Neighbor(pair<int, int> _neighbor) : id(_neighbor.first), distance(_neighbor.second) {};
+    int getId() {return id;};
     int getDistance() {return distance;};
 };
 
 class Geography {
 private:
-    unordered_map<int, Node*> nodes;
-    unordered_map<Node*, vector<Neighbor>> edges;
-    unordered_map<string, Node*> IPmap;
+    unordered_map<int, Node> nodes;
+    unordered_map<int, vector<Neighbor>> edges;
+    unordered_map<uint32_t, int> IPmap;
     // Cached Server IP for each Client
-    unordered_map<string, string> cache;
+    unordered_map<uint32_t, uint32_t> cache;
 
 public:
     Geography() {};
     Geography(string filename);
-    ~Geography();
     // Find Nearest Server
     string findServer(string client);
 };
 
-string selectServer(Info* info, RoundRobin* rr, Geography* geo, string client);
+uint32_t IP_UINT(string IP);
+string UINT_IP(uint32_t IP);
+bool MapComp(const pair<int, int>& lhs, const pair<int, int>& rhs);
+string selectServer(Info* info, RoundRobin* rr, Geography* geo, string clientIP);
 
 #endif
