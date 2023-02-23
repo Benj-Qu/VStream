@@ -404,6 +404,7 @@ void MiProxy::update_throughput(Connection &conn) {
         << new_throughput << " "
         << conn.current_throughput << " "
         << conn.current_bitrate << endl;
+    log.flush();
 }
 
 void MiProxy::parse_xml(Connection &conn) {
