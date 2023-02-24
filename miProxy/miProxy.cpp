@@ -17,12 +17,12 @@ void MiProxy::get_options(int argc, char *argv[]) {
     if (argc == 6 && args[1] == "--nodns") {
         dns_mode = false;
         listen_port = stoi(args[2]);
-        www_ip = args[3];
+        default_www_ip = args[3];
         alpha = stof(args[4]);
         log_path = args[5];
         cout << "dns_mode: " << dns_mode
              << "\nlisten_port: " << listen_port
-             << "\nwww_ip: " << www_ip
+             << "\nwww_ip: " << default_www_ip
              << "\nalpha: " << alpha
              << "\nlog_path: " << log_path << endl;
     } else if (argc == 7 && args[1] == "--dns") {
@@ -76,6 +76,9 @@ void MiProxy::init_master_socket() {
 
 void MiProxy::init() {
     init_master_socket();
+    if (dns_mode) {
+        init_dns_socket();
+    }
     log.open(log_path);
     puts("Waiting for connections ...");
 }
@@ -104,6 +107,11 @@ void MiProxy::handle_master_connection() {
         clients[ip].client_socket = new_socket;
         clients[ip].server_socket = -1;
         clients[ip].client_ip = ip;
+        if (dns_mode) {
+            clients[ip].www_ip = request_dns();
+        } else {
+            clients[ip].www_ip = default_www_ip;
+        }
     }
 }
 
@@ -153,7 +161,7 @@ void MiProxy::handle_request_message(Connection &conn) {
             throw runtime_error("socket failed");
         }
         struct sockaddr_in address;
-        if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {  // TODO
+        if (make_client_sockaddr(&address, conn.www_ip.c_str(), 80) == -1) {
             throw runtime_error("make_client_sockaddr failed");
         }
 
@@ -180,10 +188,9 @@ void MiProxy::handle_request_message(Connection &conn) {
     conn.client_message.clear();
 }
 
-const static string DOMAIN_NAME = "video.cse.umich.edu"; // DNS server resolve
+const static string DOMAIN_NAME = "video.cse.umich.edu";  // DNS server resolve
 
-void MiProxy::init_dns_socket()
-{
+void MiProxy::init_dns_socket() {
     dns_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (dns_socket < 0) {
         throw runtime_error("socket failed");
@@ -206,12 +213,17 @@ void MiProxy::init_dns_socket()
     cout << "Connecting to dns server success..." << endl;
 
     // resolve ip if dns
-        
+
     handle_dns_request();
     handle_dns_response();
 }
-void MiProxy::handle_dns_request()
-{
+
+string MiProxy::request_dns() {
+    handle_dns_request();
+    return handle_dns_response();
+}
+
+void MiProxy::handle_dns_request() {
     // DNS Header
     string header = make_dns_Header() + "\0";
     string question = make_dns_Question() + "\0";
@@ -231,44 +243,35 @@ void MiProxy::handle_dns_request()
     send_all(dns_socket, question.c_str(), question.size());
 }
 
-void MiProxy::handle_dns_response()
-{
+string MiProxy::handle_dns_response() {
     uint32_t headerSize;
-	memset(&headerSize, 0, sizeof(headerSize));
+    memset(&headerSize, 0, sizeof(headerSize));
     cout << "Receving header size from dns server..." << endl;
-	if (recv(dns_socket, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
-		std::cerr << "Error reading dns message" << std::endl;
-		exit(1);
-	}
-	headerSize = ntohl(headerSize);
+    if (recv(dns_socket, &headerSize, sizeof(headerSize), 0) != sizeof(headerSize)) {
+        std::cerr << "Error reading dns message" << std::endl;
+        exit(1);
+    }
+    headerSize = ntohl(headerSize);
 
     // Receive DNS Header
     cout << "Receving header from dns server..." << endl;
-	DNSHeader header = DNSHeader::decode(receive_all(dns_socket, headerSize));
-
-    if(header.AA != 1) {
-        return;
-    }
+    DNSHeader header = DNSHeader::decode(receive_all(dns_socket, headerSize));
 
     cout << "Receving record size from dns server..." << endl;
     uint32_t recordSize;
-	memset(&recordSize, 0, sizeof(recordSize));
-	if (recv(dns_socket, &recordSize, sizeof(recordSize), 0) != sizeof(recordSize)) {
-		std::cerr << "Error reading dns message" << std::endl;
-		exit(1);
-	}
-	recordSize = ntohl(recordSize);
+    memset(&recordSize, 0, sizeof(recordSize));
+    if (recv(dns_socket, &recordSize, sizeof(recordSize), 0) != sizeof(recordSize)) {
+        std::cerr << "Error reading dns message" << std::endl;
+        exit(1);
+    }
+    recordSize = ntohl(recordSize);
 
     cout << "Receving record from dns server..." << endl;
     DNSRecord record = DNSRecord::decode(receive_all(dns_socket, recordSize));
-    www_ip = record.RDATA;
-    cout << "www_ip " << www_ip << endl;
-    close(dns_socket);
-
+    return record.RDATA;
 }
 
-string MiProxy::make_dns_Header()
-{
+string MiProxy::make_dns_Header() {
     DNSHeader header;
     header.ID = 1;
     header.QR = 0;
@@ -283,11 +286,10 @@ string MiProxy::make_dns_Header()
     header.ANCOUNT = 0;
     header.NSCOUNT = 0;
     header.ARCOUNT = 0;
-return header.encode(header);
+    return header.encode(header);
 }
 
-string MiProxy::make_dns_Question()
-{
+string MiProxy::make_dns_Question() {
     DNSQuestion question;
     strcpy(question.QNAME, "video.cse.umich.edu");
     question.QTYPE = 1;
@@ -487,7 +489,6 @@ void MiProxy::run() {
         // then its an incoming connection, call accept()
         if (FD_ISSET(master_socket, &readfds)) {
             handle_master_connection();
-            if (dns_mode) init_dns_socket();
         }
         // else it's some IO operation on a client socket
         for (auto &client : clients) {
@@ -504,16 +505,15 @@ void MiProxy::run() {
 static const int MAX_MESSAGE_SIZE = 256;
 
 string MiProxy::receive_all(int connectionfd, uint32_t size) {
-	// Initialize message with given size.
-	char msg[MAX_MESSAGE_SIZE + 1];
-	memset(msg, 0, sizeof(msg));
+    // Initialize message with given size.
+    char msg[MAX_MESSAGE_SIZE + 1];
+    memset(msg, 0, sizeof(msg));
 
-	if (recv(connectionfd, msg, size, 0) == -1) {
-		std::cerr << "Error reading stream message" << std::endl;
-		exit(1);
-	}
-	msg[size+1] = '\0';
+    if (recv(connectionfd, msg, size, 0) == -1) {
+        std::cerr << "Error reading stream message" << std::endl;
+        exit(1);
+    }
+    msg[size + 1] = '\0';
 
-
-	return string(msg, size);
+    return string(msg, size);
 }

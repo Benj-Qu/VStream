@@ -36,6 +36,7 @@ struct Connection {
     int server_port;
     string client_ip; // also used as key in clients map
     int current_bitrate;
+    string www_ip;
 };
 
 class MiProxy {
@@ -47,7 +48,7 @@ class MiProxy {
    private:
     bool dns_mode;
     int listen_port;
-    string www_ip;
+    string default_www_ip;
     string dns_ip;
     int dns_port;
     float alpha;
@@ -71,8 +72,9 @@ class MiProxy {
     void update_throughput(Connection &conn);
     
     void init_dns_socket();
+    string request_dns();
     void handle_dns_request();
-    void handle_dns_response();
+    string handle_dns_response();
     string make_dns_Header();
     string make_dns_Question();
 
