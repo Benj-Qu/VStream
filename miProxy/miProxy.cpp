@@ -212,10 +212,6 @@ void MiProxy::init_dns_socket() {
     }
     cout << "Connecting to dns server success..." << endl;
 
-    // resolve ip if dns
-
-    handle_dns_request();
-    handle_dns_response();
 }
 
 string MiProxy::request_dns() {
@@ -513,7 +509,7 @@ string MiProxy::receive_all(int connectionfd, uint32_t size) {
         std::cerr << "Error reading stream message" << std::endl;
         exit(1);
     }
-    msg[size + 1] = '\0';
+    msg[size] = '\0';
 
     return string(msg, size);
 }
