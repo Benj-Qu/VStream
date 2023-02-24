@@ -153,13 +153,6 @@ void MiProxy::handle_request_message(Connection &conn) {
         if (conn.server_socket < 0) {
             throw runtime_error("socket failed");
         }
-
-        // resolve ip if dns
-        if (dns_mode){
-            handle_dns_request(conn);
-            handle_dns_response(conn);
-        }
-
         struct sockaddr_in address;
         if (make_client_sockaddr(&address, www_ip.c_str(), 80) == -1) {  // TODO
             throw runtime_error("make_client_sockaddr failed");
@@ -198,7 +191,7 @@ void MiProxy::init_dns_socket()
     }
 
     int yes = 1;
-    if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+    if (setsockopt(dns_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
         throw runtime_error("setsockopt failed");
     }
 
@@ -211,12 +204,20 @@ void MiProxy::init_dns_socket()
     if (connect(dns_socket, (sockaddr *)&address, sizeof(address)) < 0) {
         throw runtime_error("connect dns failed");
     }
+    cout << "Connecting to dns server success..." << endl;
+
+    // resolve ip if dns
+        
+    handle_dns_request();
+    handle_dns_response();
+
+
 }
-void MiProxy::handle_dns_request(Connection &conn)
+void MiProxy::handle_dns_request()
 {
     // DNS Header
-    string header = make_DNSHeader();
-    string question = make_DNSQuestion();
+    string header = make_dns_Header();
+    string question = make_dns_Question();
 
     cout << "Sending header size to dns server..." << endl;
     uint32_t header_size = htonl(static_cast<uint32_t>(header.length()));
@@ -233,12 +234,8 @@ void MiProxy::handle_dns_request(Connection &conn)
     send_all(dns_socket, question.c_str(), question.size());
 }
 
-void MiProxy::handle_dns_response(Connection &conn)
+void MiProxy::handle_dns_response()
 {
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    getpeername(conn.client_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-
     uint32_t headerSize;
 	memset(&headerSize, 0, sizeof(headerSize));
     cout << "Receving header size from dns server..." << endl;
@@ -269,10 +266,11 @@ void MiProxy::handle_dns_response(Connection &conn)
     DNSRecord record = DNSRecord::decode(receive_all(dns_socket, recordSize));
     www_ip = record.RDATA;
     cout << "www_ip " << www_ip << endl;
+    close(dns_socket);
 
 }
 
-string MiProxy::make_DNSHeader()
+string MiProxy::make_dns_Header()
 {
     DNSHeader header;
     header.ID = 1;
@@ -291,7 +289,7 @@ string MiProxy::make_DNSHeader()
 return header.encode(header);
 }
 
-string MiProxy::make_DNSQuestion()
+string MiProxy::make_dns_Question()
 {
     DNSQuestion question;
     strcpy(question.QNAME, "video.cse.umich.edu");

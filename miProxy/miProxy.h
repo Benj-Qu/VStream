@@ -71,10 +71,10 @@ class MiProxy {
     void update_throughput(Connection &conn);
     
     void init_dns_socket();
-    void handle_dns_request(Connection &conn);
-    void handle_dns_response(Connection &conn);
-    string make_DNSHeader();
-    string make_DNSQuestion();
+    void handle_dns_request();
+    void handle_dns_response();
+    string make_dns_Header();
+    string make_dns_Question();
 
     string receive_all(int connectionfd, uint32_t size);
 
