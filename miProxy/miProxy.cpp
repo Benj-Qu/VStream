@@ -77,7 +77,6 @@ void MiProxy::init_master_socket() {
 void MiProxy::init() {
     init_master_socket();
     log.open(log_path);
-    if (dns_mode) init_dns_socket();
     puts("Waiting for connections ...");
 }
 
@@ -210,14 +209,12 @@ void MiProxy::init_dns_socket()
         
     handle_dns_request();
     handle_dns_response();
-
-
 }
 void MiProxy::handle_dns_request()
 {
     // DNS Header
-    string header = make_dns_Header();
-    string question = make_dns_Question();
+    string header = make_dns_Header() + "\0";
+    string question = make_dns_Question() + "\0";
 
     cout << "Sending header size to dns server..." << endl;
     uint32_t header_size = htonl(static_cast<uint32_t>(header.length()));
@@ -455,6 +452,7 @@ int MiProxy::parse_header(Connection &conn) {
         return -1;
     }
     string cl_str = conn.server_message.substr(cl_pos + 16, con_end_pos - cl_pos - 16);
+    cout << cl_str << endl;
     int content_length = stoi(cl_str);
     cout << "Content-Length: " << content_length << endl;
     conn.server_message_len = end_pos + 4 + (size_t)content_length;
@@ -489,6 +487,7 @@ void MiProxy::run() {
         // then its an incoming connection, call accept()
         if (FD_ISSET(master_socket, &readfds)) {
             handle_master_connection();
+            if (dns_mode) init_dns_socket();
         }
         // else it's some IO operation on a client socket
         for (auto &client : clients) {
